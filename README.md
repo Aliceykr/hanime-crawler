@@ -49,26 +49,20 @@ $env:HANIME_PROXY_ENABLED = "true"
 - 源码运行：`app/config.py` 的上上级 → 整个工程目录可移动到任意位置后照常运行（`data/` 自动创建）。
 - exe 运行（PyInstaller 冻结）：`BASE_DIR = exe 所在目录` → `data/`、下载文件都落在 exe 旁，exe 可整体拷贝到任何机器/目录。
 
-## 打包为 exe（保留前端设计不变）
+## 打包为 exe（WebView 窗口版，前端设计不变）
 
-依赖 PyInstaller：
+双击 `hanime-crawler.exe` 直接弹出应用窗口（pywebview + Windows WebView2 内核，内嵌加载前端界面），无需手动打开浏览器；关闭窗口即退出进程。前端 HTML/CSS/JS 与浏览器版完全一致，零改动。
+
+依赖与构建（脚本已提交）：
 
 ```powershell
-pip install pyinstaller
-python -m PyInstaller --noconfirm --clean --onefile --console --name hanime-crawler `
-  --add-data "app/static;app/static" `
-  --hidden-import uvicorn.logging `
-  --hidden-import uvicorn.loops --hidden-import uvicorn.loops.auto `
-  --hidden-import uvicorn.protocols.http.auto `
-  --hidden-import uvicorn.protocols.websockets.auto `
-  --hidden-import uvicorn.lifespan.on `
-  --hidden-import anyio._backends._asyncio `
-  launcher.py
+pip install pywebview pythonnet pyinstaller
+powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 
-产物：`dist/hanime-crawler.exe`（约 22 MB，单文件）。双击运行后打开 http://127.0.0.1:8000；首次启动需等待解压数秒。exe 旁的 `data/`（数据库/下载）自动创建，exe 移到别处即带着数据走。
+产物：`dist/hanime-crawler.exe`（单文件，约 60 MB 含 WebView 运行时），可整体拷贝到任意目录/机器。exe 旁的 `data/`（数据库/下载）自动创建，移到哪数据跟到哪。
 
-> 打包入口是顶层 `launcher.py`（绝对导入），源码开发仍用 `python -m app.main`。PyInstaller 产物（dist/build/*.spec）不入库。
+> 窗口版服务监听动态空闲端口（避免与本机已有 8000 服务冲突）；`HANIME_NO_WEBVIEW=1` 时以固定 8000 无窗口模式运行（自动化验证用）。源码开发仍用 `python -m app.main`（自动开系统浏览器）。PyInstaller 产物（dist/build/*.spec）不入库。
 
 ## 测试
 

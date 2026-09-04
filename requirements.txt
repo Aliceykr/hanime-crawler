@@ -4,3 +4,6 @@ fastapi
 uvicorn[standard]
 pydantic
 pytest
+# 桌面窗口壳（打包 exe 用；源码运行不需要）
+pywebview
+pythonnet
