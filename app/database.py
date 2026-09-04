@@ -363,6 +363,20 @@ class Database:
             ).fetchone()
             return row["id"] if row else None
 
+    def list_crawl_tasks(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM crawl_tasks ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def list_page_meta(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM pages_meta ORDER BY fetched_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     # ── 评论（M2） ──
     def save_comments(self, video_code: str, comments: list[Comment]) -> None:
         if not comments:

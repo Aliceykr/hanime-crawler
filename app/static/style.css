@@ -52,6 +52,9 @@ button { font: inherit; cursor: pointer; }
   border: none; background: var(--accent); color: #fff; font-weight: 600;
 }
 .search-box button:active { opacity: .8; }
+.search-box button.ghost-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--text);
+}
 
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }

@@ -31,7 +31,7 @@ def client(tmp_path, monkeypatch):
             self.db = db
 
         async def crawl_home(self):
-            return {}
+            return {"rows": {}, "structure_warning": None}
 
         async def crawl_search(self, query=None, page=1, filters=None):
             return {"cards": [], "total_pages": 1, "query": query}
@@ -46,10 +46,18 @@ def client(tmp_path, monkeypatch):
             self.db.upsert_video(d)
             return d
 
+        async def crawl_preview(self, date):
+            from app.models import Preview
+            items = [Preview(date=date, code="990001", title="P1")]
+            return {"date": date, "items": [i.model_dump() for i in items]}
+
         async def run_crawl_task(self, task_id, kind, target, **kw):
             self.db.update_crawl_task(task_id, "running")
             try:
-                await self.crawl_video(target)
+                if kind == "preview":
+                    await self.crawl_preview(target)
+                else:
+                    await self.crawl_video(target)
                 self.db.update_crawl_task(task_id, "completed")
             except Exception as e:
                 self.db.update_crawl_task(task_id, "failed", str(e))
@@ -134,3 +142,28 @@ def test_static_index_served(client):
     assert "Hanime" in r.text
     r2 = app.get("/static/style.css")
     assert r2.status_code == 200
+
+
+def test_previews_route(client):
+    app, _ = client
+    r = app.get("/api/previews/202604")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["date"] == "202604"
+    assert body["items"][0]["code"] == "990001"
+
+
+def test_tasks_route(client):
+    app, db = client
+    app.get("/api/video/999003")  # 触发一个任务
+    r = app.get("/api/tasks")
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert items and items[0]["kind"] == "video"
+
+
+def test_pages_meta_route(client):
+    app, _ = client
+    r = app.get("/api/pages_meta")
+    assert r.status_code == 200
+    assert "items" in r.json()

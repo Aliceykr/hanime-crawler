@@ -11,8 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.parser import (
-    parse_cards, parse_comments, parse_count, parse_home, parse_preview,
-    parse_search, parse_video_detail, sanitize_filename,
+    detect_structure_change, parse_cards, parse_comments, parse_count, parse_home,
+    parse_preview, parse_search, parse_video_detail, sanitize_filename,
 )
 
 FIX = Path(__file__).resolve().parent / "fixtures"
@@ -130,3 +130,16 @@ def test_parse_preview():
 def test_parse_preview_error_page():
     items = parse_preview("<title>Server Error</title>", "202609")
     assert items == []
+
+
+# ── 结构变化检测（§5.3）──
+def test_detect_structure_change():
+    assert detect_structure_change(load("home.html"), "home") is None
+    assert detect_structure_change(load("search.html"), "search") is None
+    assert detect_structure_change(load("video.html"), "video") is None
+    assert detect_structure_change(load("preview.html"), "preview") is None
+    # 改版页（HTTP 200 但结构缺失）应触发提示
+    assert detect_structure_change("<html><body>empty</body></html>", "home")
+    assert detect_structure_change("<html><body>empty</body></html>", "search")
+    assert detect_structure_change("<html><body>empty</body></html>", "video")
+    assert detect_structure_change("<html><body>empty</body></html>", "preview")

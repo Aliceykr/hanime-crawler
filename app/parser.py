@@ -264,15 +264,21 @@ def parse_preview(html: str, date: str) -> list[Preview]:
 
 # ── 页面结构变化检测（§5.3）：HTTP 200 但关键节点缺失 → 提示改版 ──
 def detect_structure_change(html: str, kind: str) -> Optional[str]:
-    """返回 None=正常；返回描述字符串=可能改版。"""
+    """返回 None=正常；返回描述字符串=可能改版。
+
+    选择器与对应 parse_* 保持同一口径，避免“解析正常但检测误报”。
+    """
     sel = Selector(text=html)
     if kind in ("home",):
-        if not sel.css(".home-rows-section-margin-top"):
-            return "首页缺少 .home-rows-section-margin-top 容器，可能改版"
+        if not sel.css("a.horizontal-row-title"):
+            return "首页缺少 a.horizontal-row-title 行容器，可能改版"
     elif kind in ("search",):
         if not sel.css(".horizontal-card"):
             return "搜索页无 .horizontal-card，可能改版"
     elif kind in ("video",):
         if not sel.css("#shareBtn-title"):
             return "详情页缺少 #shareBtn-title，可能改版"
+    elif kind in ("preview",):
+        if not sel.css(".preview-video-width"):
+            return "预告页无 .preview-video-width，可能改版或该月份无数据"
     return None

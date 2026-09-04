@@ -200,7 +200,12 @@
         if (!r.ok) return r.json().then(function (b) { throw new Error(b.detail || "HTTP " + r.status); });
         return r.json();
       })
-      .then(function (data) { renderHome(data.rows); })
+      .then(function (data) {
+        if (data.structure_warning) {
+          showError("⚠ " + data.structure_warning);
+        }
+        renderHome(data.rows);
+      })
       .catch(function (e) {
         showError("首页加载失败（请检查代理 127.0.0.1:7890 是否可用）：" +
           (e && e.message ? e.message : ""));
@@ -208,7 +213,33 @@
       });
   }
 
+  function loadPreview() {
+    hideError();
+    var d = new Date();
+    var month = String(d.getMonth() + 1).padStart(2, "0");
+    var date = String(d.getFullYear()) + month;
+    showLoading("加载新番预告…");
+    fetch("/api/previews/" + date)
+      .then(function (r) {
+        if (!r.ok) return r.json().then(function (b) { throw new Error(b.detail || "HTTP " + r.status); });
+        return r.json();
+      })
+      .then(function (data) {
+        var head = document.createElement("div");
+        head.style.cssText = "margin:4px 0 14px;color:#9a9aa3;font-size:13px;";
+        head.textContent = "新番預告 · " + date + " · " + data.items.length + " 部";
+        renderGrid(data.items);
+        view.insertBefore(head, view.firstChild);
+      })
+      .catch(function (e) {
+        showError("预告加载失败（本月可能尚未发布或站点无数据）：" +
+          (e && e.message ? e.message : ""));
+        showLoading("预告加载失败");
+      });
+  }
+
   document.getElementById("searchBtn").addEventListener("click", doSearch);
+  document.getElementById("previewBtn").addEventListener("click", loadPreview);
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
   document.getElementById("brandBtn").addEventListener("click", loadHome);
 

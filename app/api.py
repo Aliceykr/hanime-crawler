@@ -63,8 +63,7 @@ def create_app() -> FastAPI:
     @app.get("/api/home")
     async def api_home() -> dict[str, Any]:
         try:
-            rows = await crawler.crawl_home()
-            return {"rows": rows}
+            return await crawler.crawl_home()
         except (ChallengeError, FetchError) as e:
             raise _http_error(e)
 
@@ -86,6 +85,23 @@ def create_app() -> FastAPI:
             return await crawler.crawl_search(query=query, page=page, filters=filters)
         except (ChallengeError, FetchError) as e:
             raise _http_error(e)
+
+    # ── 新番预告（M2） ──
+    @app.get("/api/previews/{date}")
+    async def api_previews(date: str) -> dict[str, Any]:
+        try:
+            return await crawler.crawl_preview(date)
+        except (ChallengeError, FetchError) as e:
+            raise _http_error(e)
+
+    # ── 任务列表 / 页面元数据（M2） ──
+    @app.get("/api/tasks")
+    async def api_tasks(limit: int = 20) -> dict[str, Any]:
+        return {"items": db.list_crawl_tasks(limit=min(limit, 200))}
+
+    @app.get("/api/pages_meta")
+    async def api_pages_meta(limit: int = 20) -> dict[str, Any]:
+        return {"items": db.list_page_meta(limit=min(limit, 200))}
 
     # ── 视频详情：缓存优先，未命中创建后台任务 ──
     @app.get("/api/video/{code}")
