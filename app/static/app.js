@@ -24,9 +24,13 @@
       '<div class="loading"><div class="spinner"></div><div>' + esc(text) + "</div></div>";
   }
 
+  function imgProxy(u) {
+    return u ? "/api/cover?url=" + encodeURIComponent(u) : "";
+  }
+
   function renderCard(c) {
     var cover = c.cover_url
-      ? '<div class="card-thumb"><img loading="lazy" alt="" src="' + esc(c.cover_url) + '">'
+      ? '<div class="card-thumb"><img loading="lazy" alt="" src="' + esc(imgProxy(c.cover_url)) + '">'
       : '<div class="card-thumb">';
     var badge = c.duration
       ? '<span class="card-badge">' + esc(c.duration) + "</span>" : "";
@@ -82,7 +86,7 @@
   function renderDetail(data) {
     var v = data.video || {};
     var cover = v.cover_url
-      ? '<img alt="" src="' + esc(v.cover_url) + '">' : "";
+      ? '<img alt="" src="' + esc(imgProxy(v.cover_url)) + '">' : "";
     var tags = (v.tags || []).map(function (t) {
       return '<span class="tag">' + esc(t) + "</span>";
     }).join("");

@@ -124,6 +124,59 @@ def test_search_route(client):
     assert r.json()["query"] == "test"
 
 
+def test_cover_route_validation(client):
+    """封面代理：非法协议 400；合法图片请求走 mock 返回图片字节。"""
+    app, _ = client
+
+    import app.api as api_mod
+
+    class _FakeResp:
+        status_code = 200
+        content = b"\xff\xd8\xff\xe0fakejpeg"
+        headers = {"content-type": "image/jpeg"}
+
+    async def _fake_get(url):
+        return _FakeResp()
+
+    async def _fake_fail(url):
+        raise RuntimeError("boom")
+
+    monkeypatch_backup = api_mod._get_cover_client
+
+    def _patch(getter):
+        class _FakeClient:
+            def __init__(self, url):
+                self.url = url
+
+            async def get(self, url):
+                return await getter(url)
+
+        def _factory(config):
+            return _FakeClient(None)
+
+        api_mod._get_cover_client = _factory
+
+    try:
+        # 非法协议
+        r = app.get("/api/cover", params={"url": "javascript:alert(1)"})
+        assert r.status_code == 400
+        r = app.get("/api/cover", params={"url": "file:///etc/passwd"})
+        assert r.status_code == 400
+        # 成功取图
+        _patch(_fake_get)
+        r = app.get("/api/cover", params={"url": "https://cdn/x/1.jpg"})
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "image/jpeg"
+        assert r.content == _FakeResp.content
+        assert "cache-control" in r.headers
+        # 上游失败
+        _patch(_fake_fail)
+        r = app.get("/api/cover", params={"url": "https://cdn/x/2.jpg"})
+        assert r.status_code == 502
+    finally:
+        api_mod._get_cover_client = monkeypatch_backup
+
+
 def test_video_uncached_returns_202_then_cached(client):
     app, db = client
     r = app.get("/api/video/999001")

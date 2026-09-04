@@ -14,12 +14,13 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .client import ChallengeError, FetchError
-from .config import BASE_DIR, load_config, load_user_settings, save_user_settings
+from .config import BASE_DIR, Config, load_config, load_user_settings, save_user_settings
 from .crawler import Crawler
 from .database import Database
 from .downloader import DownloadManager
@@ -31,6 +32,23 @@ if getattr(sys, "frozen", False):
     _STATIC_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)) / "app" / "static"
 else:
     _STATIC_DIR = Path(BASE_DIR) / "app" / "static"
+
+# ── 封面图片代理客户端：WebView/浏览器直连封面 CDN 会因 Referer 防盗链 403，
+#    由后端带站点 Referer（走代理）取图后转给前端（§7.4 修复记录）。 ──
+_cover_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_cover_client(config: Config) -> httpx.AsyncClient:
+    global _cover_client
+    if _cover_client is None:
+        proxy = config.proxy.url if config.proxy.enabled else None
+        _cover_client = httpx.AsyncClient(
+            headers={"User-Agent": config.ua, "Referer": config.base_url},
+            proxy=proxy,
+            timeout=config.crawler.timeout,
+            follow_redirects=True,
+        )
+    return _cover_client
 
 
 def build_video_payload(db: Database, code: str) -> Optional[dict[str, Any]]:
@@ -118,6 +136,24 @@ def create_app() -> FastAPI:
             return await crawler.crawl_preview(date)
         except (ChallengeError, FetchError) as e:
             raise _http_error(e)
+
+    # ── 封面图片代理（直连被 CDN Referer 防盗链 403，走后端取图） ──
+    @app.get("/api/cover")
+    async def api_cover(url: str) -> Response:
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="invalid url")
+        try:
+            resp = await _get_cover_client(config).get(url)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502,
+                                detail=f"cover fetch failed: {type(e).__name__}: {e}")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"cover upstream {resp.status_code}")
+        ctype = resp.headers.get("content-type", "image/jpeg")
+        if not ctype.lower().startswith("image/"):
+            raise HTTPException(status_code=502, detail=f"not an image: {ctype}")
+        return Response(content=resp.content, media_type=ctype,
+                        headers={"Cache-Control": "public, max-age=3600"})
 
     # ── 任务列表 / 页面元数据（M2） ──
     @app.get("/api/tasks")
