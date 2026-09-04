@@ -252,6 +252,25 @@ a.ghost-btn {
 .dl-btn:hover { border-color: var(--accent); }
 .dl-hint { color: var(--text2); font-size: 13px; }
 
+/* ── 試看弹窗 ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; padding: 20px;
+}
+.modal { position: relative; width: min(92vw, 1100px); }
+.modal-ress { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; }
+.modal-res {
+  background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+  padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.modal-res.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.modal-video { width: 100%; max-height: 80vh; background: #000; border-radius: 10px; }
+.modal-close {
+  position: absolute; top: -42px; right: 0; background: none; border: none;
+  color: #fff; font-size: 24px; cursor: pointer; padding: 8px; line-height: 1;
+}
+
 .related { margin-top: 26px; }
 .related h3 { font-size: 16px; margin-bottom: 12px; }
 

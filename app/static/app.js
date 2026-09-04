@@ -120,16 +120,21 @@
     var tags = (v.tags || []).map(function (t) {
       return '<button class="tag tag-btn" type="button" data-tag="' + esc(t) + '">' + esc(t) + "</button>";
     }).join("");
-    // 每个分辨率一个下载按钮（1080P → 720P → 480P 固定顺序）
+    // 每个分辨率一个下载按钮（1080P → 720P → 480P 固定顺序）；試看用 480P（最轻）
     var resOrder = { "1080P": 0, "1080p": 0, "720P": 1, "720p": 1, "480P": 2, "480p": 2 };
-    var sources = (v.sources || []).slice().sort(function (a, b) {
+    var sortedSources = (v.sources || []).slice().sort(function (a, b) {
       var ra = resOrder[a.resolution] != null ? resOrder[a.resolution] : 9;
       var rb = resOrder[b.resolution] != null ? resOrder[b.resolution] : 9;
       return ra - rb;
-    }).map(function (s) {
+    });
+    var sources = sortedSources.map(function (s) {
       return '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
         '" data-res="' + esc(s.resolution) + '">' + esc(s.resolution) + "</button>";
     }).join("");
+    var tryPick = sortedSources;  // 試看覆盖全部分辨率流
+    var sourcesBlock = sources
+      ? '<div class="sources"><button class="dl-btn try-btn" type="button">試看</button>' + sources + "</div>"
+      : (data.partial ? '<div class="sources"><span class="dl-hint">正在获取视频源…</span></div>' : "");
     var related = (v.related || []).map(renderCard).join("");
 
     view.innerHTML =
@@ -146,8 +151,7 @@
       "</div>" +
       (v.title_cn ? '<div class="meta">中文标题：' + esc(v.title_cn) + "</div>" : "") +
       (tags ? '<div class="tag-list">' + tags + "</div>" : "") +
-      (sources ? '<div class="sources">' + sources + "</div>" :
-        (data.partial ? '<div class="sources"><span class="dl-hint">正在获取视频源…</span></div>' : "")) +
+      sourcesBlock +
       (v.description ? '<div class="desc">' + esc(v.description) + "</div>" : "") +
       "</div></div>" +
       (related ? '<section class="related"><h3>相关视频</h3><div class="grid">' + related + "</div></section>" : "");
@@ -164,11 +168,48 @@
     Array.prototype.forEach.call(view.querySelectorAll(".dl-btn"), function (btn) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
+        if (btn.classList.contains("try-btn")) return;  // 試看按钮单独处理
         startDownload(btn.getAttribute("data-code"), btn.getAttribute("data-res"));
       });
     });
+    var tryBtn = view.querySelector(".try-btn");
+    if (tryBtn) {
+      tryBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (sortedSources.length) openTry(sortedSources);
+      });
+    }
     bindCards(view);
     window.scrollTo(0, 0);
+  }
+
+  // 試看弹窗：全部分辨率流可切换播放（经 /api/stream 后端代理，带站点 Referer）
+  function openTry(sources) {
+    var ov = document.createElement("div");
+    ov.className = "modal-overlay";
+    var btns = sources.map(function (s, i) {
+      return '<button class="modal-res' + (i === 0 ? " active" : "") +
+        '" type="button" data-url="' + esc(s.url) + '">' + esc(s.resolution) + "</button>";
+    }).join("");
+    ov.innerHTML = '<div class="modal">' +
+      '<button class="modal-close" type="button" title="关闭">✕</button>' +
+      '<div class="modal-ress">' + btns + "</div>" +
+      '<video class="modal-video" controls autoplay src="' +
+      esc("/api/stream?url=" + encodeURIComponent(sources[0].url)) + '"></video>' +
+      "</div>";
+    document.body.appendChild(ov);
+    var video = ov.querySelector(".modal-video");
+    Array.prototype.forEach.call(ov.querySelectorAll(".modal-res"), function (b) {
+      b.addEventListener("click", function () {
+        Array.prototype.forEach.call(ov.querySelectorAll(".modal-res"), function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        video.src = "/api/stream?url=" + encodeURIComponent(b.getAttribute("data-url"));
+        video.play();
+      });
+    });
+    function close() { ov.remove(); }
+    ov.querySelector(".modal-close").addEventListener("click", close);
+    ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
   }
 
   function startDownload(code, res) {

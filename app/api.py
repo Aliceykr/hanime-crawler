@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .client import ChallengeError, FetchError
@@ -36,6 +36,19 @@ else:
 # ── 封面图片代理客户端：WebView/浏览器直连封面 CDN 会因 Referer 防盗链 403，
 #    由后端带站点 Referer（走代理）取图后转给前端（§7.4 修复记录）。 ──
 _cover_client: Optional[httpx.AsyncClient] = None
+# ── 视频流代理客户端（試看弹窗）：同样带站点 Referer 绕过 CDN 防盗链，支持 Range（播放器 seek）──
+_stream_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_stream_client(config: Config) -> httpx.AsyncClient:
+    global _stream_client
+    if _stream_client is None:
+        proxy = config.proxy.url if config.proxy.enabled else None
+        _stream_client = httpx.AsyncClient(
+            headers={"User-Agent": config.ua, "Referer": config.base_url},
+            proxy=proxy, timeout=httpx.Timeout(30, connect=15),
+        )
+    return _stream_client
 
 
 def _get_cover_client(config: Config) -> httpx.AsyncClient:
@@ -154,6 +167,39 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=f"not an image: {ctype}")
         return Response(content=resp.content, media_type=ctype,
                         headers={"Cache-Control": "public, max-age=3600"})
+
+    # ── 試看弹窗：视频流代理（带站点 Referer，支持 Range/206 供播放器 seek） ──
+    @app.get("/api/stream")
+    async def api_stream(url: str, request: Request) -> Response:
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="invalid url")
+        headers: dict[str, str] = {}
+        range_h = request.headers.get("range")
+        if range_h:
+            headers["Range"] = range_h
+        try:
+            resp = await _get_stream_client(config).get(url, headers=headers)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502,
+                                detail=f"stream fetch failed: {type(e).__name__}: {e}")
+        if resp.status_code not in (200, 206):
+            raise HTTPException(status_code=502, detail=f"stream upstream {resp.status_code}")
+        ctype = resp.headers.get("content-type", "video/mp4")
+        if not ctype.lower().startswith(("video/", "application/octet-stream")):
+            raise HTTPException(status_code=502, detail=f"not a video: {ctype}")
+        pass_headers = {}
+        for k in ("content-type", "content-length", "content-range", "accept-ranges", "cache-control"):
+            if resp.headers.get(k):
+                pass_headers[k] = resp.headers[k]
+
+        async def _iter():
+            try:
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+            finally:
+                await resp.aclose()
+
+        return StreamingResponse(_iter(), status_code=resp.status_code, headers=pass_headers)
 
     # ── 任务列表 / 页面元数据（M2） ──
     @app.get("/api/tasks")
