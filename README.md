@@ -45,7 +45,30 @@ $env:HANIME_PROXY_ENABLED = "true"
 
 ## 路径与可移植性
 
-所有路径由 `BASE_DIR = Path(__file__).resolve().parent.parent` 自动探测派生（绝对路径、不依赖 cwd、不写死盘符），整个工程目录可以移动到任意位置后照常运行（`data/` 运行时自动创建）。
+所有路径由 `BASE_DIR` 自动探测派生（绝对路径、不依赖 cwd、不写死盘符）：
+- 源码运行：`app/config.py` 的上上级 → 整个工程目录可移动到任意位置后照常运行（`data/` 自动创建）。
+- exe 运行（PyInstaller 冻结）：`BASE_DIR = exe 所在目录` → `data/`、下载文件都落在 exe 旁，exe 可整体拷贝到任何机器/目录。
+
+## 打包为 exe（保留前端设计不变）
+
+依赖 PyInstaller：
+
+```powershell
+pip install pyinstaller
+python -m PyInstaller --noconfirm --clean --onefile --console --name hanime-crawler `
+  --add-data "app/static;app/static" `
+  --hidden-import uvicorn.logging `
+  --hidden-import uvicorn.loops --hidden-import uvicorn.loops.auto `
+  --hidden-import uvicorn.protocols.http.auto `
+  --hidden-import uvicorn.protocols.websockets.auto `
+  --hidden-import uvicorn.lifespan.on `
+  --hidden-import anyio._backends._asyncio `
+  launcher.py
+```
+
+产物：`dist/hanime-crawler.exe`（约 22 MB，单文件）。双击运行后打开 http://127.0.0.1:8000；首次启动需等待解压数秒。exe 旁的 `data/`（数据库/下载）自动创建，exe 移到别处即带着数据走。
+
+> 打包入口是顶层 `launcher.py`（绝对导入），源码开发仍用 `python -m app.main`。PyInstaller 产物（dist/build/*.spec）不入库。
 
 ## 测试
 

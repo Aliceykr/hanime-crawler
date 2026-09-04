@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+
+def _detect_base_dir() -> Path:
+    """工程根自动探测。
+
+    - 源码运行：app/config.py 的上上级（随工程移动自动跟随）。
+    - PyInstaller 冻结（exe）：sys.executable 所在目录（data/ 落在 exe 旁，不写进临时解压目录）。
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
 # ── 工程根：运行时自动探测，随工程移动自动跟随（§5.4 硬约束） ──
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = _detect_base_dir()
 
 
 def _abs(*parts: str) -> str:

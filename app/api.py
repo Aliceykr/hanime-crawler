@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -25,7 +26,11 @@ from .downloader import DownloadManager
 
 log = logging.getLogger("hanime.api")
 
-_STATIC_DIR = Path(BASE_DIR) / "app" / "static"
+# 静态前端目录：exe 打包时随 --add-data 解压到 _MEIPASS/app/static
+if getattr(sys, "frozen", False):
+    _STATIC_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)) / "app" / "static"
+else:
+    _STATIC_DIR = Path(BASE_DIR) / "app" / "static"
 
 
 def build_video_payload(db: Database, code: str) -> Optional[dict[str, Any]]:
