@@ -60,7 +60,7 @@ pip install pywebview pythonnet pyinstaller
 powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 
-产物：`dist/hanime-crawler.exe`（单文件，约 60 MB 含 WebView 运行时），可整体拷贝到任意目录/机器。exe 旁的 `data/`（数据库/下载）自动创建，移到哪数据跟到哪。
+产物：`dist/hanime-crawler/`（**目录模式 onedir**，约 48 MB，不压缩不解压）。**启动约 1 秒**（onefile 单文件每次启动要解压 60 MB，已弃用）。分发时把整个 `hanime-crawler` 文件夹拷贝/压缩传输即可，可放到任意目录/机器；exe 旁的 `data/`（数据库/下载）自动创建，移到哪数据跟到哪。
 
 > 窗口版服务监听动态空闲端口（避免与本机已有 8000 服务冲突）；`HANIME_NO_WEBVIEW=1` 时以固定 8000 无窗口模式运行（自动化验证用）。源码开发仍用 `python -m app.main`（自动开系统浏览器）。PyInstaller 产物（dist/build/*.spec）不入库。
 
