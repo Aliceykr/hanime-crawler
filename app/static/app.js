@@ -250,7 +250,8 @@
         var totalPages = data.total_pages || 1;
         var head = document.createElement("div");
         head.className = "search-head";
-        head.textContent = "“" + q + "” 第 " + page + " / " + totalPages + " 页";
+        var label = q ? "“" + q + "”" : (sort ? "排序：" + sort : "");
+        head.textContent = (label ? label + " · " : "") + "第 " + page + " / " + totalPages + " 页";
         renderGrid(data.cards);
         view.insertBefore(head, view.firstChild);
         if (totalPages > 1) view.appendChild(renderPager(page, totalPages));
@@ -450,6 +451,13 @@
 
   document.getElementById("searchBtn").addEventListener("click", doSearch);
   document.getElementById("navBackBtn").addEventListener("click", goBack);
+  // 排序下拉：选择立即生效（站点统一走 search?sort=，无关键词时即为排序浏览）
+  sortSelect.addEventListener("change", function () {
+    var q = searchInput.value.trim();
+    if (!q && !sortSelect.value) { loadHome(); return; }
+    pushNav("search", { q: q, sort: sortSelect.value });
+    searchPage(1);
+  });
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
   document.getElementById("brandBtn").addEventListener("click", function () {
     navStack.length = 0; // 回首页即重置历史
