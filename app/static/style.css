@@ -73,6 +73,46 @@ a.ghost-btn {
 .stat-label { color: var(--text2); font-size: 12px; }
 .stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; word-break: break-all; }
 
+/* ── 下载管理 ── */
+.settings-box {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  padding: 12px; margin-bottom: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+}
+.settings-box label {
+  display: flex; align-items: center; gap: 6px; flex: 1 1 260px;
+  color: var(--text2); font-size: 13px;
+}
+.settings-box input {
+  height: 36px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+.dl-row {
+  display: flex; gap: 10px; align-items: center;
+  padding: 12px; margin-bottom: 8px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+}
+.dl-main { flex: 1 1 auto; min-width: 0; }
+.dl-title { font-weight: 600; font-size: 14px; }
+.dl-status { font-size: 11px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; }
+.dl-status.completed { background: rgba(82, 196, 26, .15); color: #7bd88f; }
+.dl-status.failed, .dl-status.cancelled { background: rgba(234, 102, 104, .15); color: #ffb4b6; }
+.dl-status.downloading { background: rgba(139, 200, 234, .18); color: #9cd4f0; }
+.dl-status.queued, .dl-status.paused { background: rgba(250, 173, 20, .15); color: #f7c768; }
+.dl-bar {
+  height: 6px; border-radius: 3px; background: var(--bg);
+  margin: 6px 0; overflow: hidden;
+}
+.dl-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s; }
+.dl-meta { color: var(--text2); font-size: 12px; word-break: break-all; }
+.dl-err { color: #ffb4b6; }
+.dl-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.dl-ctl {
+  height: 32px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  font-size: 12px;
+}
+
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }
 .error-bar {

@@ -88,7 +88,9 @@
     }).join("");
     var sources = (v.sources || []).map(function (s) {
       return '<a class="src-btn" href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(s.resolution) + "</a>";
+        esc(s.resolution) + "</a>" +
+        '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
+        '" data-res="' + esc(s.resolution) + '">下载</button>';
     }).join("");
     var related = (v.related || []).map(renderCard).join("");
     var comments = (v.comments || []).map(function (c) {
@@ -120,8 +122,32 @@
       (comments ? '<section class="comments"><h3>评论</h3>' + comments + "</section>" : "");
 
     document.getElementById("backBtn").addEventListener("click", function () { loadHome(); });
+    Array.prototype.forEach.call(view.querySelectorAll(".dl-btn"), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        startDownload(btn.getAttribute("data-code"), btn.getAttribute("data-res"));
+      });
+    });
     bindCards(view);
     window.scrollTo(0, 0);
+  }
+
+  function startDownload(code, res) {
+    hideError();
+    showLoading("创建下载任务…");
+    fetch("/api/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_code: code, resolution: res })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        loadDownloads();
+      })
+      .catch(function (e) {
+        showError("创建下载任务失败：" + (e && e.message ? e.message : ""));
+        showLoading("下载任务创建失败");
+      });
   }
 
   function renderTaskProgress(taskId) {
@@ -238,6 +264,86 @@
       });
   }
 
+  function loadDownloads() {
+    hideError();
+    showLoading("加载下载任务…");
+    fetch("/api/settings")
+      .then(function (r) { return r.json(); })
+      .then(function (s) { return Promise.all([s, fetch("/api/downloads").then(function (r) { return r.json(); })]); })
+      .then(function (pair) {
+        var s = pair[0], data = pair[1];
+        var items = data.items || [];
+        var rows = items.map(function (t) {
+          var pct = (t.total_bytes > 0) ? Math.round((t.downloaded_bytes || 0) * 100 / t.total_bytes) : 0;
+          var btn = "";
+          if (t.status === "downloading" || t.status === "queued") {
+            btn = '<button class="dl-ctl" data-act="pause" data-id="' + t.id + '">暂停</button>' +
+                  '<button class="dl-ctl" data-act="cancel" data-id="' + t.id + '">取消</button>';
+          } else if (t.status === "paused") {
+            btn = '<button class="dl-ctl" data-act="resume" data-id="' + t.id + '">继续</button>' +
+                  '<button class="dl-ctl" data-act="cancel" data-id="' + t.id + '">取消</button>';
+          } else if (t.status === "failed" || t.status === "cancelled") {
+            btn = '<button class="dl-ctl" data-act="delete" data-id="' + t.id + '">删除</button>';
+          } else if (t.status === "completed") {
+            btn = '<button class="dl-ctl" data-act="delete" data-id="' + t.id + '">删除</button>';
+          }
+          var speed = t.speed > 0 ? fmtSpeed(t.speed) : "";
+          var size = (t.downloaded_bytes || 0) + " / " + (t.total_bytes || "?") + " B";
+          return '<div class="dl-row" data-status="' + esc(t.status) + '">' +
+            '<div class="dl-main"><div class="dl-title">' + esc(t.video_code) + " · " + esc(t.resolution) +
+            ' <span class="dl-status ' + esc(t.status) + '">' + esc(t.status) + "</span></div>" +
+            '<div class="dl-bar"><div class="dl-fill" style="width:' + pct + '%"></div></div>' +
+            '<div class="dl-meta">' + size + (speed ? " · " + speed : "") +
+            (t.error ? ' · <span class="dl-err">' + esc(t.error) + "</span>" : "") +
+            (t.final_path ? ' · <a href="file:///' + esc(t.final_path.replace(/\\/g, "/")) + '">' + esc(t.final_path) + "</a>" : "") +
+            "</div></div><div class=\"dl-actions\">" + btn + "</div></div>";
+        }).join("");
+        view.innerHTML =
+          '<div class="settings-box">' +
+          '<label>下载目录：<input id="dlDirInput" type="text" value="' + esc(s.downloads_dir) +
+          '" style="flex:1;min-width:220px;"></label>' +
+          '<label>定时刷新(分钟,0=关)：<input id="autoInput" type="number" min="0" value="' +
+          (s.auto_interval_minutes || 0) + '" style="width:90px;"></label>' +
+          '<button id="saveSettingsBtn" class="src-btn" type="button">保存设置</button>' +
+          "</div>" +
+          '<div class="dl-list">' + (rows || '<div class="loading">暂无下载任务</div>') + "</div>";
+        document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+        Array.prototype.forEach.call(view.querySelectorAll(".dl-ctl"), function (b) {
+          b.addEventListener("click", function () {
+            var act = b.getAttribute("data-act");
+            var id = b.getAttribute("data-id");
+            var url = "/api/download/" + id;
+            var opt = { method: act === "delete" ? "DELETE" : "POST" };
+            fetch(url + "/" + act, opt).then(function () { loadDownloads(); });
+          });
+        });
+      })
+      .catch(function (e) {
+        showError("下载列表加载失败：" + (e && e.message ? e.message : ""));
+        showLoading("下载列表加载失败");
+      });
+  }
+
+  function saveSettings() {
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        downloads_dir: document.getElementById("dlDirInput").value.trim(),
+        auto_interval_minutes: parseInt(document.getElementById("autoInput").value, 10) || 0
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { loadDownloads(); })
+      .catch(function (e) { showError("保存设置失败：" + (e && e.message ? e.message : "")); });
+  }
+
+  function fmtSpeed(bps) {
+    if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + " MB/s";
+    if (bps >= 1024) return (bps / 1024).toFixed(1) + " KB/s";
+    return Math.round(bps) + " B/s";
+  }
+
   function loadStats() {
     hideError();
     showLoading("加载統計…");
@@ -274,6 +380,7 @@
 
   document.getElementById("searchBtn").addEventListener("click", doSearch);
   document.getElementById("previewBtn").addEventListener("click", loadPreview);
+  document.getElementById("downloadsBtn").addEventListener("click", loadDownloads);
   document.getElementById("statsBtn").addEventListener("click", loadStats);
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
   document.getElementById("brandBtn").addEventListener("click", loadHome);

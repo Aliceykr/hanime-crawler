@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 # ── 工程根：运行时自动探测，随工程移动自动跟随（§5.4 硬约束） ──
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -51,6 +52,7 @@ class ProxyConfig:
 class DownloaderConfig:
     max_concurrency: int = 2
     chunk_size: int = 1 * 1024 * 1024  # 1 MiB
+    retries: int = 3                   # 单任务下载重试次数（URL 刷新重试另计）
 
 
 @dataclass
@@ -65,11 +67,50 @@ class Config:
     crawler: CrawlerConfig = field(default_factory=CrawlerConfig)
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
     downloader: DownloaderConfig = field(default_factory=DownloaderConfig)
+    auto_interval_minutes: int = 0     # 定时增量抓取（分钟）；0=关闭，见 §8 M4
+
+
+# ── 用户可写设置（前端 /api/settings 修改，持久化到 data/settings.json） ──
+def settings_path() -> Path:
+    return Path(BASE_DIR, "data", "settings.json")
+
+
+def load_user_settings() -> dict[str, Any]:
+    import json
+    p = settings_path()
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
+def save_user_settings(updates: dict[str, Any]) -> dict[str, Any]:
+    import json
+    data = load_user_settings()
+    data.update(updates)
+    p = settings_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
+
+
+def apply_user_settings(cfg: Config) -> Config:
+    """把 settings.json 中的用户设置合并进配置（env 优先级最高，在 load_config 内最后应用）。"""
+    us = load_user_settings()
+    dl = (us.get("downloads_dir") or "").strip()
+    if dl:
+        cfg.paths.downloads_dir = str(Path(dl).resolve())
+        Path(cfg.paths.downloads_dir).mkdir(parents=True, exist_ok=True)
+    if isinstance(us.get("auto_interval_minutes"), int) and us["auto_interval_minutes"] >= 0:
+        cfg.auto_interval_minutes = us["auto_interval_minutes"]
+    return cfg
 
 
 def load_config() -> Config:
-    """允许环境变量覆盖：HANIME_PROXY_URL / HANIME_PROXY_ENABLED / HANIME_DOWNLOADS_DIR。"""
-    cfg = Config()
+    """优先级：环境变量 > settings.json > 默认。"""
+    cfg = apply_user_settings(Config())
     if os.environ.get("HANIME_PROXY_URL"):
         cfg.proxy.url = os.environ["HANIME_PROXY_URL"]
     if os.environ.get("HANIME_PROXY_ENABLED"):

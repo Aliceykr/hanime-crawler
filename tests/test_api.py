@@ -66,6 +66,46 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(api_mod, "Crawler", FakeCrawler)
     monkeypatch.setattr(api_mod, "Database", lambda *a, **k: db)
 
+    class FakeDownloadManager:
+        def __init__(self, db, config, provider=None):
+            self.db = db
+
+        async def start(self):
+            pass
+
+        def enqueue(self, task_id):
+            self.db.update_download_task(task_id, status="queued")
+
+        async def pause(self, task_id):
+            t = self.db.get_download_task(task_id)
+            if not t:
+                return False
+            self.db.update_download_task(task_id, status="paused")
+            return True
+
+        async def resume(self, task_id):
+            t = self.db.get_download_task(task_id)
+            if not t:
+                return False
+            self.db.update_download_task(task_id, status="queued")
+            return True
+
+        async def cancel(self, task_id):
+            t = self.db.get_download_task(task_id)
+            if not t:
+                return False
+            self.db.update_download_task(task_id, status="cancelled")
+            return True
+
+        async def delete(self, task_id):
+            t = self.db.get_download_task(task_id)
+            if not t:
+                return False
+            self.db.delete_download_task(task_id)
+            return True
+
+    monkeypatch.setattr(api_mod, "DownloadManager", FakeDownloadManager)
+
     app = create_app()
     return TestClient(app), db
 
@@ -193,3 +233,45 @@ def test_export_csv_and_json(client):
     r2 = app.get("/api/export?fmt=json")
     assert r2.status_code == 200
     assert r2.json()[0]["code"] == "771002"
+
+
+def test_download_api_flow(client):
+    app, db = client
+    # 创建（无 source 也允许排队）
+    r = app.post("/api/download", json={"video_code": "888001", "resolution": "1080P"})
+    assert r.status_code == 200
+    tid = r.json()["id"]
+    assert r.json()["status"] == "queued"
+    # 查询 / 列表
+    assert app.get(f"/api/download/{tid}").json()["video_code"] == "888001"
+    assert app.get("/api/downloads").json()["items"][0]["id"] == tid
+    # 暂停 / 恢复 / 取消
+    assert app.post(f"/api/download/{tid}/pause").json()["status"] == "paused"
+    assert app.post(f"/api/download/{tid}/resume").json()["status"] == "queued"
+    assert app.post(f"/api/download/{tid}/cancel").json()["status"] == "cancelled"
+    # 删除
+    assert app.delete(f"/api/download/{tid}").json()["ok"] is True
+    assert app.get(f"/api/download/{tid}").status_code == 404
+
+
+def test_download_api_validation(client):
+    app, _ = client
+    assert app.post("/api/download", json={}).status_code == 400
+
+
+def test_settings_route(client, monkeypatch, tmp_path):
+    app, _ = client
+    # 隔离 settings 文件，避免污染工程 data/settings.json
+    store: dict[str, Any] = {}
+    import app.api as api_mod
+    monkeypatch.setattr(api_mod, "load_user_settings", lambda: dict(store))
+    monkeypatch.setattr(api_mod, "save_user_settings",
+                        lambda u: (store.update(u), store)[1])
+    r = app.get("/api/settings")
+    assert r.status_code == 200
+    assert r.json()["downloads_dir"]
+    r2 = app.put("/api/settings", json={"downloads_dir": r.json()["downloads_dir"]})
+    assert r2.status_code == 200
+    assert r2.json()["ok"] is True
+    # 相对路径必须拒绝
+    assert app.put("/api/settings", json={"downloads_dir": "relative/path"}).status_code == 400

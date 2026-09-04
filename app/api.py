@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,9 +18,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .client import ChallengeError, FetchError
-from .config import BASE_DIR, load_config
+from .config import BASE_DIR, load_config, load_user_settings, save_user_settings
 from .crawler import Crawler
 from .database import Database
+from .downloader import DownloadManager
+
+log = logging.getLogger("hanime.api")
 
 _STATIC_DIR = Path(BASE_DIR) / "app" / "static"
 
@@ -46,12 +50,27 @@ def create_app() -> FastAPI:
     db = Database(config)
     db.init_db()
     crawler = Crawler(config, db=db)
+    downloader = DownloadManager(db, config, provider=crawler)
 
     app = FastAPI(title="hanime-crawler", version="0.1.0")
+
+    @app.on_event("startup")
+    async def _startup() -> None:
+        await downloader.start()
+        if config.auto_interval_minutes > 0:
+            asyncio.create_task(_auto_refresh_loop(crawler, config.auto_interval_minutes))
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         await crawler.close()
+
+    async def _auto_refresh_loop(c: Crawler, minutes: int) -> None:
+        while True:
+            await asyncio.sleep(minutes * 60)
+            try:
+                await c.crawl_home()
+            except Exception as e:  # noqa: BLE001
+                log.warning("auto refresh failed: %s", e)
 
     def _http_error(e: Exception) -> HTTPException:
         if isinstance(e, ChallengeError):
@@ -159,6 +178,87 @@ def create_app() -> FastAPI:
     @app.get("/api/search_history")
     async def api_search_history() -> dict[str, Any]:
         return {"items": db.list_search_history()}
+
+    # ── M4：设置（下载目录用户可配置，§0 决策 12） ──
+    @app.get("/api/settings")
+    async def api_settings() -> dict[str, Any]:
+        us = load_user_settings()
+        return {
+            "downloads_dir": str(Path(config.paths.downloads_dir).resolve()),
+            "auto_interval_minutes": config.auto_interval_minutes,
+            "proxy_enabled": config.proxy.enabled,
+            "proxy_url": config.proxy.url,
+            "user_settings": us,
+        }
+
+    @app.put("/api/settings")
+    async def api_settings_update(payload: dict[str, Any]) -> dict[str, Any]:
+        dl = (payload.get("downloads_dir") or "").strip()
+        if dl:
+            p = Path(dl)
+            if not p.is_absolute():
+                raise HTTPException(400, "downloads_dir 必须是绝对路径")
+            p.mkdir(parents=True, exist_ok=True)
+            config.paths.downloads_dir = str(p.resolve())
+        auto = payload.get("auto_interval_minutes")
+        if isinstance(auto, int) and auto >= 0:
+            config.auto_interval_minutes = auto
+        save_user_settings({
+            "downloads_dir": str(Path(config.paths.downloads_dir).resolve()),
+            "auto_interval_minutes": config.auto_interval_minutes,
+        })
+        return {"ok": True, "downloads_dir": config.paths.downloads_dir}
+
+    # ── M4：下载任务（§0 决策 8/9） ──
+    @app.post("/api/download")
+    async def api_download_create(payload: dict[str, Any]) -> dict[str, Any]:
+        code = str(payload.get("video_code") or "").strip()
+        resolution = str(payload.get("resolution") or "").strip()
+        if not code or not resolution:
+            raise HTTPException(400, "video_code 和 resolution 必填")
+        url = None
+        for s in db.get_video_sources(code):
+            if s["resolution"] == resolution:
+                url = s["url"]
+                break
+        task_id = db.create_download_task(code, resolution, url=url)
+        downloader.enqueue(task_id)  # 立即入队返回，不阻塞 HTTP
+        return {"id": task_id, "status": "queued"}
+
+    @app.get("/api/downloads")
+    async def api_downloads(limit: int = 100) -> dict[str, Any]:
+        return {"items": db.list_download_tasks(limit=min(limit, 500))}
+
+    @app.get("/api/download/{task_id}")
+    async def api_download_get(task_id: int) -> dict[str, Any]:
+        t = db.get_download_task(task_id)
+        if t is None:
+            raise HTTPException(404, "download task not found")
+        return t
+
+    @app.post("/api/download/{task_id}/pause")
+    async def api_download_pause(task_id: int) -> dict[str, Any]:
+        if not await downloader.pause(task_id):
+            raise HTTPException(404, "download task not found")
+        return {"id": task_id, "status": db.get_download_task(task_id)["status"]}
+
+    @app.post("/api/download/{task_id}/resume")
+    async def api_download_resume(task_id: int) -> dict[str, Any]:
+        if not await downloader.resume(task_id):
+            raise HTTPException(404, "download task not found")
+        return {"id": task_id, "status": db.get_download_task(task_id)["status"]}
+
+    @app.post("/api/download/{task_id}/cancel")
+    async def api_download_cancel(task_id: int) -> dict[str, Any]:
+        if not await downloader.cancel(task_id):
+            raise HTTPException(404, "download task not found")
+        return {"id": task_id, "status": db.get_download_task(task_id)["status"]}
+
+    @app.delete("/api/download/{task_id}")
+    async def api_download_delete(task_id: int) -> dict[str, Any]:
+        if not await downloader.delete(task_id):
+            raise HTTPException(404, "download task not found")
+        return {"ok": True}
 
     # ── 静态前端 ──
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
