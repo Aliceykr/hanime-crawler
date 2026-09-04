@@ -55,6 +55,23 @@ button { font: inherit; cursor: pointer; }
 .search-box button.ghost-btn {
   background: transparent; border: 1px solid var(--border); color: var(--text);
 }
+.top-actions { display: flex; gap: 8px; }
+a.ghost-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 40px; padding: 0 14px; border-radius: 10px; text-decoration: none;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  font-size: 13px;
+}
+.stat-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.stat-cell {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px;
+}
+.stat-label { color: var(--text2); font-size: 12px; }
+.stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; word-break: break-all; }
 
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }

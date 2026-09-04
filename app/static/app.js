@@ -238,8 +238,43 @@
       });
   }
 
+  function loadStats() {
+    hideError();
+    showLoading("加载統計…");
+    fetch("/api/stats")
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        var rows = [
+          ["视频总数", s.total_videos],
+          ["作者数", s.total_artists],
+          ["标签数", s.total_tags],
+          ["评论数", s.total_comments],
+          ["累计观看", s.total_views != null ? Number(s.total_views).toLocaleString() : "—"],
+          ["视频源记录", s.source_count],
+          ["下载任务", s.total_downloads],
+          ["最近抓取", s.last_crawl || "—"],
+        ].map(function (r2) {
+          return '<div class="stat-cell"><div class="stat-label">' + r2[0] +
+            '</div><div class="stat-value">' + esc(String(r2[1])) + "</div></div>";
+        }).join("");
+        var t = (s.tasks_by_status || {});
+        var statusHtml = Object.keys(t).map(function (k) {
+          return '<span class="tag">' + esc(k) + ": " + esc(String(t[k])) + "</span>";
+        }).join("");
+        view.innerHTML =
+          '<div class="stat-grid">' + rows + "</div>" +
+          '<div class="meta" style="margin-top:12px;">任务状态：' +
+          (statusHtml || '<span class="tag">暂无</span>') + "</div>";
+      })
+      .catch(function (e) {
+        showError("統計加载失败：" + (e && e.message ? e.message : ""));
+        showLoading("統計加载失败");
+      });
+  }
+
   document.getElementById("searchBtn").addEventListener("click", doSearch);
   document.getElementById("previewBtn").addEventListener("click", loadPreview);
+  document.getElementById("statsBtn").addEventListener("click", loadStats);
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
   document.getElementById("brandBtn").addEventListener("click", loadHome);
 

@@ -377,6 +377,50 @@ class Database:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    # ── M3：导出与统计 ──
+    def export_videos(self) -> list[dict[str, Any]]:
+        """导出视频（tags/artist 汇总为逗号分隔，供 CSV/JSON 导出）。"""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """SELECT v.code, v.title, v.title_cn, v.description, v.views, v.likes,
+                          v.published_at, v.duration, v.cover_url, v.series_title,
+                          v.crawled_at,
+                          COALESCE(a.name, '') AS artist,
+                          (SELECT GROUP_CONCAT(t.name, ', ')
+                             FROM video_tags vt JOIN tags t ON t.id = vt.tag_id
+                            WHERE vt.video_code = v.code) AS tags
+                     FROM videos v
+                     LEFT JOIN artists a ON a.id = v.artist_id
+                     ORDER BY v.code DESC""",
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_stats(self) -> dict[str, Any]:
+        with self.connect() as conn:
+            def one(q, *a):
+                return conn.execute(q, a).fetchone()[0]
+            total_videos = one("SELECT COUNT(*) FROM videos")
+            total_artists = one("SELECT COUNT(*) FROM artists")
+            total_tags = one("SELECT COUNT(*) FROM tags")
+            total_comments = one("SELECT COUNT(*) FROM comments")
+            total_views = one("SELECT COALESCE(SUM(views),0) FROM videos")
+            total_downloads = one("SELECT COUNT(*) FROM downloads")
+            tasks_by_status = conn.execute(
+                "SELECT status, COUNT(*) c FROM crawl_tasks GROUP BY status").fetchall()
+            source_count = one("SELECT COUNT(*) FROM video_sources")
+            last_crawl = one("SELECT MAX(crawled_at) FROM videos")
+            return {
+                "total_videos": total_videos,
+                "total_artists": total_artists,
+                "total_tags": total_tags,
+                "total_comments": total_comments,
+                "total_views": total_views,
+                "total_downloads": total_downloads,
+                "source_count": source_count,
+                "tasks_by_status": {r["status"]: r["c"] for r in tasks_by_status},
+                "last_crawl": last_crawl,
+            }
+
     # ── 评论（M2） ──
     def save_comments(self, video_code: str, comments: list[Comment]) -> None:
         if not comments:

@@ -8,11 +8,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .client import ChallengeError, FetchError
@@ -102,6 +103,33 @@ def create_app() -> FastAPI:
     @app.get("/api/pages_meta")
     async def api_pages_meta(limit: int = 20) -> dict[str, Any]:
         return {"items": db.list_page_meta(limit=min(limit, 200))}
+
+    # ── M3：导出与统计 ──
+    @app.get("/api/stats")
+    async def api_stats() -> dict[str, Any]:
+        return db.get_stats()
+
+    @app.get("/api/export")
+    async def api_export(fmt: str = "csv"):
+        items = db.export_videos()
+        from fastapi.responses import Response, PlainTextResponse
+        if fmt == "json":
+            body = json.dumps(items, ensure_ascii=False, indent=2)
+            return Response(content=body, media_type="application/json",
+                            headers={"Content-Disposition":
+                                     'attachment; filename="hanime_videos.json"'})
+        # csv：兼容 Excel（utf-8-sig BOM）
+        import io
+        import csv as _csv
+        buf = io.StringIO()
+        if items:
+            writer = _csv.DictWriter(buf, fieldnames=list(items[0].keys()))
+            writer.writeheader()
+            writer.writerows(items)
+        return Response(content="\ufeff" + buf.getvalue(),
+                        media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 'attachment; filename="hanime_videos.csv"'})
 
     # ── 视频详情：缓存优先，未命中创建后台任务 ──
     @app.get("/api/video/{code}")

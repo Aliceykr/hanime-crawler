@@ -167,3 +167,29 @@ def test_pages_meta_route(client):
     r = app.get("/api/pages_meta")
     assert r.status_code == 200
     assert "items" in r.json()
+
+
+def test_stats_route(client):
+    app, db = client
+    from app.models import VideoDetail
+    db.upsert_video(VideoDetail(code="771001", title="S", views=1200))
+    r = app.get("/api/stats")
+    assert r.status_code == 200
+    s = r.json()
+    assert s["total_videos"] >= 1
+    assert s["total_views"] >= 1200
+    assert "total_downloads" in s
+
+
+def test_export_csv_and_json(client):
+    app, db = client
+    from app.models import VideoDetail
+    db.upsert_video(VideoDetail(code="771002", title="导出测试", views=10))
+    r = app.get("/api/export?fmt=csv")
+    assert r.status_code == 200
+    assert r.text.startswith("\ufeff")  # Excel 兼容 BOM
+    assert "771002" in r.text
+    assert "导出测试" in r.text
+    r2 = app.get("/api/export?fmt=json")
+    assert r2.status_code == 200
+    assert r2.json()[0]["code"] == "771002"
