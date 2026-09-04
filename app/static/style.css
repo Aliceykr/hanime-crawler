@@ -163,6 +163,9 @@ a.ghost-btn {
   gap: 14px; margin: 18px 0 8px;
 }
 .pager-info { color: var(--text2); font-size: 13px; }
+/* 下载完成文件路径：点击打开所在文件夹（保持蓝色链接外观） */
+.file-link { color: #8ab4ff; text-decoration: none; word-break: break-all; }
+.file-link:hover { text-decoration: underline; }
 
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }

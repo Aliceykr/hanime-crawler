@@ -301,6 +301,27 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "download task not found")
         return {"ok": True}
 
+    @app.post("/api/download/{task_id}/open_folder")
+    async def api_download_open_folder(task_id: int) -> dict[str, Any]:
+        """打开已完成文件的所在文件夹（Windows explorer /select 定位文件）。"""
+        t = db.get_download_task(task_id)
+        if t is None:
+            raise HTTPException(404, "download task not found")
+        fp = (t.get("final_path") or "").strip()
+        if not fp:
+            raise HTTPException(400, "任务无最终文件")
+        final = Path(fp).resolve()
+        dl_root = Path(config.paths.downloads_dir).resolve()
+        try:
+            final.relative_to(dl_root)
+        except ValueError:
+            raise HTTPException(403, "路径超出下载目录")
+        if not final.exists():
+            raise HTTPException(404, "文件不存在")
+        import subprocess
+        subprocess.Popen(["explorer", "/select,", str(final)])
+        return {"ok": True}
+
     # ── 静态前端 ──
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

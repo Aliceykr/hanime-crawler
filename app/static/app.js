@@ -120,8 +120,13 @@
     var tags = (v.tags || []).map(function (t) {
       return '<button class="tag tag-btn" type="button" data-tag="' + esc(t) + '">' + esc(t) + "</button>";
     }).join("");
-    // 每个分辨率一个下载按钮（不调浏览器下载，全部走后端任务）
-    var sources = (v.sources || []).map(function (s) {
+    // 每个分辨率一个下载按钮（1080P → 720P → 480P 固定顺序）
+    var resOrder = { "1080P": 0, "1080p": 0, "720P": 1, "720p": 1, "480P": 2, "480p": 2 };
+    var sources = (v.sources || []).slice().sort(function (a, b) {
+      var ra = resOrder[a.resolution] != null ? resOrder[a.resolution] : 9;
+      var rb = resOrder[b.resolution] != null ? resOrder[b.resolution] : 9;
+      return ra - rb;
+    }).map(function (s) {
       return '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
         '" data-res="' + esc(s.resolution) + '">' + esc(s.resolution) + "</button>";
     }).join("");
@@ -360,7 +365,7 @@
             '<div class="dl-bar"><div class="dl-fill" style="width:' + pct + '%"></div></div>' +
             '<div class="dl-meta">' + size + (speed ? " · " + speed : "") +
             (t.error ? ' · <span class="dl-err">' + esc(t.error) + "</span>" : "") +
-            (t.final_path ? ' · <a href="file:///' + esc(t.final_path.replace(/\\/g, "/")) + '">' + esc(t.final_path) + "</a>" : "") +
+            (t.final_path ? ' · <a class="file-link" href="#" data-id="' + t.id + '">' + esc(t.final_path) + "</a>" : "") +
             "</div></div><div class=\"dl-actions\">" + btn + "</div></div>";
         }).join("");
         view.innerHTML =
@@ -381,6 +386,22 @@
             // delete 走 DELETE /api/download/{id}，其余走 POST /{id}/{act}
             var opt = { method: act === "delete" ? "DELETE" : "POST" };
             fetch(act === "delete" ? url : url + "/" + act, opt).then(function () { loadDownloads(true); });
+          });
+        });
+        // 点击文件路径：后端打开所在文件夹并选中该文件
+        Array.prototype.forEach.call(view.querySelectorAll(".file-link"), function (a) {
+          a.addEventListener("click", function (e) {
+            e.preventDefault();
+            fetch("/api/download/" + a.getAttribute("data-id") + "/open_folder", { method: "POST" })
+              .then(function (r) {
+                return r.json().then(function (b) {
+                  if (!r.ok) throw new Error(b.detail || "HTTP " + r.status);
+                  return b;
+                });
+              })
+              .catch(function (err) {
+                showError("打开文件夹失败：" + (err && err.message ? err.message : ""));
+              });
           });
         });
         // 轮询刷新下载进度（进入视图后每 2s 静默更新一次）
