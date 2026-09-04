@@ -1,0 +1,6 @@
+httpx[socks]
+parsel
+fastapi
+uvicorn[standard]
+pydantic
+pytest
