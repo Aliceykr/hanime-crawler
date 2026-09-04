@@ -154,6 +154,16 @@ a.ghost-btn {
   background: rgba(0, 0, 0, .45);
 }
 
+/* ── 搜索 ── */
+.search-head {
+  margin: 4px 0 14px; color: var(--text2); font-size: 13px;
+}
+.pager {
+  display: flex; align-items: center; justify-content: center;
+  gap: 14px; margin: 18px 0 8px;
+}
+.pager-info { color: var(--text2); font-size: 13px; }
+
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }
 .error-bar {

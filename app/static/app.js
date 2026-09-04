@@ -232,25 +232,49 @@
     pushNav("search", { q: searchInput.value.trim(), sort: sortSelect.value });
     var q = searchInput.value.trim();
     if (!q) { showError("请输入搜索关键词"); return; }
+    searchPage(1);
+  }
+
+  function searchPage(page) {
+    var q = searchInput.value.trim();
+    var sort = sortSelect.value;
     showLoading("搜索…");
-    var url = "/api/search?query=" + encodeURIComponent(q) + "&page=1";
-    if (sortSelect.value) url += "&sort=" + encodeURIComponent(sortSelect.value);
+    var url = "/api/search?query=" + encodeURIComponent(q) + "&page=" + page;
+    if (sort) url += "&sort=" + encodeURIComponent(sort);
     fetch(url)
       .then(function (r) {
         if (!r.ok) return r.json().then(function (b) { throw new Error(b.detail || "HTTP " + r.status); });
         return r.json();
       })
       .then(function (data) {
+        var totalPages = data.total_pages || 1;
         var head = document.createElement("div");
-        head.style.cssText = "margin:4px 0 14px;color:#9a9aa3;font-size:13px;";
-        head.textContent = "“" + q + "” 共 " + data.cards.length + " 条 · 共 " + data.total_pages + " 页";
+        head.className = "search-head";
+        head.textContent = "“" + q + "” 第 " + page + " / " + totalPages + " 页";
         renderGrid(data.cards);
         view.insertBefore(head, view.firstChild);
+        if (totalPages > 1) view.appendChild(renderPager(page, totalPages));
       })
       .catch(function (e) {
         showError("搜索失败：" + (e && e.message ? e.message : "未知错误"));
         showLoading("搜索失败");
       });
+  }
+
+  function renderPager(page, totalPages) {
+    var div = document.createElement("div");
+    div.className = "pager";
+    div.innerHTML =
+      '<button type="button" class="ghost-btn page-btn" data-page="' + (page - 1) + '"' + (page <= 1 ? " disabled" : "") + '>上一頁</button>' +
+      '<span class="pager-info">' + page + " / " + totalPages + "</span>" +
+      '<button type="button" class="ghost-btn page-btn" data-page="' + (page + 1) + '"' + (page >= totalPages ? " disabled" : "") + '>下一頁</button>';
+    Array.prototype.forEach.call(div.querySelectorAll(".page-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        searchPage(parseInt(btn.getAttribute("data-page"), 10));
+      });
+    });
+    return div;
   }
 
   function loadHome() {

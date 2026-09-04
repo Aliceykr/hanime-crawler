@@ -130,11 +130,13 @@ def parse_home(html: str) -> dict[str, list[VideoCard]]:
     return rows
 
 
-# ── 搜索：卡片 + 总页数（skip-page 控件：value=当前页，/ N=总页数） ──
+# ── 搜索：卡片 + 总页数（skip-page 控件：value=当前页，/ N=总页数，N 前可能有 &nbsp;） ──
 def parse_search(html: str) -> tuple[list[VideoCard], int]:
     cards = parse_cards(html)
     total_pages = 1
-    m = re.search(r'id="skip-page-input"[^>]*value="(\d+)"[^>]*>.{0,300}?/\s*(\d+)', html, re.S)
+    m = re.search(
+        r'id="skip-page-input"[^>]*value="(\d+)"[^>]*>.{0,400}?/\s*(?:(?:&nbsp;)|\s)*(\d+)',
+        html, re.S)
     if m:
         try:
             total_pages = max(1, int(m.group(2)))
