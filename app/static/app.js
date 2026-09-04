@@ -417,8 +417,6 @@
   }
 
   document.getElementById("searchBtn").addEventListener("click", doSearch);
-  document.getElementById("previewBtn").addEventListener("click", loadPreview);
-  document.getElementById("downloadsBtn").addEventListener("click", function () { loadDownloads(); });
   document.getElementById("navBackBtn").addEventListener("click", goBack);
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
   document.getElementById("brandBtn").addEventListener("click", function () {
@@ -436,6 +434,14 @@
   }
   document.getElementById("hamburgerBtn").addEventListener("click", function () { openSidebar(true); });
   sidebarOverlay.addEventListener("click", function () { openSidebar(false); });
+  document.getElementById("sPreviewBtn").addEventListener("click", function () {
+    openSidebar(false);
+    loadPreview();
+  });
+  document.getElementById("sDownloadsBtn").addEventListener("click", function () {
+    openSidebar(false);
+    loadDownloads();
+  });
   document.getElementById("sStatsBtn").addEventListener("click", function () {
     openSidebar(false);
     loadStats();

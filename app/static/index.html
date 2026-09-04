@@ -25,20 +25,20 @@
         <option value="時長最長">時長最長</option>
       </select>
       <button id="searchBtn" type="button">搜索</button>
-      <button id="previewBtn" type="button" class="ghost-btn">新番預告</button>
     </div>
     <span class="top-actions">
       <button id="navBackBtn" type="button" class="ghost-btn" disabled>撤回</button>
-      <button id="downloadsBtn" type="button" class="ghost-btn">下載</button>
     </span>
   </div>
 </header>
 
-<!-- 左侧可滑出滑入侧边栏：統計 / CSV / JSON -->
+<!-- 左侧可滑出滑入侧边栏：新番預告 / 下載 / 統計 / CSV / JSON -->
 <div class="sidebar-overlay hidden" id="sidebarOverlay"></div>
 <aside class="sidebar" id="sidebar" aria-hidden="true">
   <div class="sidebar-head">菜单</div>
   <div class="sidebar-body">
+    <button class="side-btn" id="sPreviewBtn" type="button">新番預告</button>
+    <button class="side-btn" id="sDownloadsBtn" type="button">下載</button>
     <button class="side-btn" id="sStatsBtn" type="button">統計</button>
     <a class="side-btn" id="sExportCsv" href="/api/export?fmt=csv" download>導出 CSV</a>
     <a class="side-btn" id="sExportJson" href="/api/export?fmt=json" download>導出 JSON</a>
