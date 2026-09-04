@@ -21,6 +21,12 @@ body {
 button { font: inherit; cursor: pointer; }
 
 /* ── 顶栏 ── */
+.hamburger {
+  height: 40px; width: 40px; font-size: 18px; line-height: 1;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); flex: none;
+}
+.hamburger:hover { border-color: var(--accent); }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   background: var(--bg2);
@@ -52,10 +58,17 @@ button { font: inherit; cursor: pointer; }
   border: none; background: var(--accent); color: #fff; font-weight: 600;
 }
 .search-box button:active { opacity: .8; }
-.search-box button.ghost-btn {
+/* 统一深色按钮风格：ghost-btn 全局生效（顶部/搜索区/右上角） */
+button.ghost-btn {
+  height: 40px; padding: 0 16px; border-radius: 10px;
   background: transparent; border: 1px solid var(--border); color: var(--text);
+  font-weight: 500;
 }
+button.ghost-btn:hover { border-color: var(--accent); color: var(--text); }
 .top-actions { display: flex; gap: 8px; }
+.top-actions .ghost-btn:disabled {
+  opacity: .45; cursor: not-allowed;
+}
 a.ghost-btn {
   display: inline-flex; align-items: center; justify-content: center;
   height: 40px; padding: 0 14px; border-radius: 10px; text-decoration: none;
@@ -113,6 +126,34 @@ a.ghost-btn {
   font-size: 12px;
 }
 
+/* ── 左侧可滑出滑入侧边栏 ── */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 70;
+  width: 240px; max-width: 82vw;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform .22s ease;
+  display: flex; flex-direction: column;
+  box-shadow: 0 0 24px rgba(0, 0, 0, .4);
+}
+.sidebar.open { transform: translateX(0); }
+.sidebar-head {
+  padding: 18px 18px 12px; font-size: 15px; font-weight: 700;
+  color: var(--text); border-bottom: 1px solid var(--border);
+}
+.sidebar-body { padding: 8px 0; }
+.side-btn {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 18px; font-size: 14px; color: var(--text);
+  background: none; border: none; border-bottom: 1px solid var(--border);
+  text-decoration: none; min-height: 44px;
+}
+.side-btn:hover { background: var(--card); color: var(--accent); }
+.sidebar-overlay {
+  position: fixed; inset: 0; z-index: 65;
+  background: rgba(0, 0, 0, .45);
+}
+
 /* ── 内容区 ── */
 .content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }
 .error-bar {
@@ -164,6 +205,7 @@ a.ghost-btn {
   background: var(--card); color: var(--text); border: 1px solid var(--border);
   min-height: 40px; padding: 0 16px; border-radius: 10px; margin-bottom: 16px;
 }
+.back-btn:hover { border-color: var(--accent); }
 .detail { display: flex; gap: 20px; flex-wrap: wrap; }
 .detail-cover { flex: 1 1 300px; max-width: 480px; }
 .detail-cover img { width: 100%; border-radius: 14px; display: block; }
@@ -183,13 +225,8 @@ a.ghost-btn {
   font-size: 13px; white-space: pre-wrap; word-break: break-word;
 }
 .sources { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
-.src-btn {
-  background: var(--bg2); color: var(--text); border: 1px solid var(--border);
-  min-height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600;
-}
-.src-btn:hover { border-color: var(--accent); }
 
-/* 详情页「下载」按钮：与 src-btn 同风格，统一深色界面 */
+/* 详情页「下载」按钮：与 ghost-btn 同风格，统一深色界面 */
 .dl-btn {
   background: var(--bg2); color: var(--text); border: 1px solid var(--border);
   min-height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600;
@@ -199,18 +236,6 @@ a.ghost-btn {
 
 .related { margin-top: 26px; }
 .related h3 { font-size: 16px; margin-bottom: 12px; }
-
-/* ── 评论 ── */
-.comments { margin-top: 26px; }
-.comments h3 { font-size: 16px; margin-bottom: 12px; }
-.comment {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px 14px; margin-bottom: 10px;
-}
-.comment-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
-.comment-author { color: #8ab4ff; font-weight: 600; font-size: 13px; }
-.comment-time { color: var(--text2); font-size: 11.5px; }
-.comment-body { font-size: 13px; word-break: break-word; }
 
 /* ── 任务进度 ── */
 .task-progress { text-align: center; padding: 60px 16px; }

@@ -6,6 +6,34 @@
   var errorBar = document.getElementById("errorBar");
   var searchInput = document.getElementById("searchInput");
   var sortSelect = document.getElementById("sortSelect");
+  var navBackBtn = document.getElementById("navBackBtn");
+
+  // ── 视图历史栈（右上「撤回」= 回到上一步） ──
+  var navStack = [];
+  var _restoring = false; // goBack 恢复视图时抑制重复压栈
+  function pushNav(type, args) {
+    if (_restoring) return;
+    var top = navStack[navStack.length - 1];
+    if (top && top.type === type && JSON.stringify(top.args) === JSON.stringify(args || {})) return;
+    navStack.push({ type: type, args: args || {} });
+    updateBackBtn();
+  }
+  function updateBackBtn() { navBackBtn.disabled = navStack.length <= 1; }
+  function goBack() {
+    if (navStack.length <= 1) return;
+    navStack.pop();
+    updateBackBtn();
+    var p = navStack[navStack.length - 1];
+    _restoring = true;
+    try {
+      if (p.type === "home") loadHome();
+      else if (p.type === "search") doSearch();
+      else if (p.type === "video") openVideo(p.args.code);
+      else if (p.type === "preview") loadPreview();
+      else if (p.type === "downloads") loadDownloads();
+      else if (p.type === "stats") loadStats();
+    } finally { _restoring = false; }
+  }
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -92,20 +120,12 @@
     var tags = (v.tags || []).map(function (t) {
       return '<span class="tag">' + esc(t) + "</span>";
     }).join("");
+    // 每个分辨率一个下载按钮（不调浏览器下载，全部走后端任务）
     var sources = (v.sources || []).map(function (s) {
-      return '<a class="src-btn" href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' +
-        esc(s.resolution) + "</a>" +
-        '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
-        '" data-res="' + esc(s.resolution) + '">下载</button>';
+      return '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
+        '" data-res="' + esc(s.resolution) + '">' + esc(s.resolution) + "</button>";
     }).join("");
     var related = (v.related || []).map(renderCard).join("");
-    var comments = (v.comments || []).map(function (c) {
-      return '<div class="comment"><div class="comment-head">' +
-        '<span class="comment-author">' + esc(c.author) + "</span>" +
-        (c.created_at ? '<span class="comment-time">' + esc(c.created_at) + "</span>" : "") +
-        (c.likes != null ? '<span class="comment-time">👍 ' + esc(String(c.likes)) + "</span>" : "") +
-        "</div><div class=\"comment-body\">" + esc(c.content) + "</div></div>";
-    }).join("");
 
     view.innerHTML =
       '<button class="back-btn" id="backBtn" type="button">← 返回</button>' +
@@ -124,10 +144,9 @@
       (sources ? '<div class="sources">' + sources + "</div>" : "") +
       (v.description ? '<div class="desc">' + esc(v.description) + "</div>" : "") +
       "</div></div>" +
-      (related ? '<section class="related"><h3>相关视频</h3><div class="grid">' + related + "</div></section>" : "") +
-      (comments ? '<section class="comments"><h3>评论</h3>' + comments + "</section>" : "");
+      (related ? '<section class="related"><h3>相关视频</h3><div class="grid">' + related + "</div></section>" : "");
 
-    document.getElementById("backBtn").addEventListener("click", function () { loadHome(); });
+    document.getElementById("backBtn").addEventListener("click", goBack);
     Array.prototype.forEach.call(view.querySelectorAll(".dl-btn"), function (btn) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
@@ -164,6 +183,7 @@
 
   function openVideo(code) {
     hideError();
+    pushNav("video", { code: code });
     showLoading("加载详情…");
     fetch("/api/video/" + encodeURIComponent(code))
       .then(function (resp) {
@@ -201,6 +221,7 @@
 
   function doSearch() {
     hideError();
+    pushNav("search", { q: searchInput.value.trim(), sort: sortSelect.value });
     var q = searchInput.value.trim();
     if (!q) { showError("请输入搜索关键词"); return; }
     showLoading("搜索…");
@@ -226,6 +247,7 @@
 
   function loadHome() {
     hideError();
+    pushNav("home", {});
     showLoading("加载首页…");
     fetch("/api/home")
       .then(function (r) {
@@ -247,6 +269,7 @@
 
   function loadPreview() {
     hideError();
+    pushNav("preview", {});
     var d = new Date();
     var month = String(d.getMonth() + 1).padStart(2, "0");
     var date = String(d.getFullYear()) + month;
@@ -272,7 +295,10 @@
 
   function loadDownloads(silent) {
     hideError();
-    if (!silent) showLoading("加载下载任务…");
+    if (!silent) {
+      pushNav("downloads", {});
+      showLoading("加载下载任务…");
+    }
     fetch("/api/settings")
       .then(function (r) { return r.json(); })
       .then(function (s) { return Promise.all([s, fetch("/api/downloads").then(function (r) { return r.json(); })]); })
@@ -357,6 +383,7 @@
 
   function loadStats() {
     hideError();
+    pushNav("stats", {});
     showLoading("加载統計…");
     fetch("/api/stats")
       .then(function (r) { return r.json(); })
@@ -391,10 +418,31 @@
 
   document.getElementById("searchBtn").addEventListener("click", doSearch);
   document.getElementById("previewBtn").addEventListener("click", loadPreview);
-  document.getElementById("downloadsBtn").addEventListener("click", loadDownloads);
-  document.getElementById("statsBtn").addEventListener("click", loadStats);
+  document.getElementById("downloadsBtn").addEventListener("click", function () { loadDownloads(); });
+  document.getElementById("navBackBtn").addEventListener("click", goBack);
   searchInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doSearch(); });
-  document.getElementById("brandBtn").addEventListener("click", loadHome);
+  document.getElementById("brandBtn").addEventListener("click", function () {
+    navStack.length = 0; // 回首页即重置历史
+    loadHome();
+  });
 
+  // ── 左侧可滑出滑入侧边栏 ──
+  var sidebar = document.getElementById("sidebar");
+  var sidebarOverlay = document.getElementById("sidebarOverlay");
+  function openSidebar(open) {
+    sidebar.classList.toggle("open", open);
+    sidebarOverlay.classList.toggle("hidden", !open);
+    sidebar.setAttribute("aria-hidden", String(!open));
+  }
+  document.getElementById("hamburgerBtn").addEventListener("click", function () { openSidebar(true); });
+  sidebarOverlay.addEventListener("click", function () { openSidebar(false); });
+  document.getElementById("sStatsBtn").addEventListener("click", function () {
+    openSidebar(false);
+    loadStats();
+  });
+  document.getElementById("sExportCsv").addEventListener("click", function () { openSidebar(false); });
+  document.getElementById("sExportJson").addEventListener("click", function () { openSidebar(false); });
+
+  updateBackBtn();
   loadHome();
 })();
