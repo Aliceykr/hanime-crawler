@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import date as _date
 from typing import Any, Optional
 from urllib.parse import urlencode
@@ -41,6 +42,10 @@ def card_to_detail(card: VideoCard) -> VideoDetail:
 
 
 class Crawler:
+    # 首页/搜索结果短缓存（秒）：重复访问直接命中，显著提速且不造成明显陈旧
+    _cache_ttl = 120.0
+    _cache_max = 64
+
     def __init__(self, config: Optional[Config] = None,
                  client: Optional[HanimeClient] = None,
                  db: Optional[Database] = None):
@@ -49,9 +54,22 @@ class Crawler:
         self.client = client or HanimeClient(self.config, self.db)
         # 爬虫并发独立于（将来的）下载并发：爬虫并发上限 + 请求限速（§7）
         self._sem = asyncio.Semaphore(self.config.crawler.max_concurrency)
+        self._cache: dict[str, tuple[float, Any]] = {}
 
     async def close(self) -> None:
         await self.client.close()
+
+    async def _cached(self, key: str, factory):
+        """内存 TTL 缓存；超过上限时整体清空防止膨胀。"""
+        now = time.monotonic()
+        hit = self._cache.get(key)
+        if hit and now - hit[0] < self._cache_ttl:
+            return hit[1]
+        val = await factory()
+        self._cache[key] = (time.monotonic(), val)
+        if len(self._cache) > self._cache_max:
+            self._cache.clear()
+        return val
 
     async def _run(self, coro):
         async with self._sem:
@@ -60,18 +78,20 @@ class Crawler:
     # ── 具体抓取动作 ──
     async def crawl_home(self) -> dict[str, Any]:
         async def _do():
-            html = await self.client.fetch("", kind="home")
-            warn = detect_structure_change(html, "home")
-            if warn:
-                log.warning("home structure change: %s", warn)
-            rows = parse_home(html)
-            for cards in rows.values():
-                for card in cards:
-                    self.db.upsert_video(card_to_detail(card))
-            return {
-                "rows": {t: [c.model_dump() for c in cards] for t, cards in rows.items()},
-                "structure_warning": warn,
-            }
+            async def _fetch_home():
+                html = await self.client.fetch("", kind="home")
+                warn = detect_structure_change(html, "home")
+                if warn:
+                    log.warning("home structure change: %s", warn)
+                rows = parse_home(html)
+                for cards in rows.values():
+                    for card in cards:
+                        self.db.upsert_video(card_to_detail(card))
+                return {
+                    "rows": {t: [c.model_dump() for c in cards] for t, cards in rows.items()},
+                    "structure_warning": warn,
+                }
+            return await self._cached("home", _fetch_home)
         return await self._run(_do())
 
     async def crawl_search(self, query: Optional[str] = None, page: int = 1,
@@ -88,22 +108,25 @@ class Crawler:
             for v in vals:
                 params.setdefault(f"{key}[]", []).append(v)
         url = "search?" + urlencode(params, doseq=True)
+        cache_key = "search:" + urlencode({"q": query or "", "page": page, **filters}, doseq=True)
 
         async def _do():
-            html = await self.client.fetch(url, kind="search")
-            warn = detect_structure_change(html, "search")
-            if warn:
-                log.warning("search structure change: %s", warn)
-            cards, total_pages = parse_search(html)
-            for card in cards:
-                self.db.upsert_video(card_to_detail(card))
-            self.db.add_search_history(query or "", filters)
-            return {
-                "cards": [c.model_dump() for c in cards],
-                "total_pages": total_pages,
-                "query": query,
-                "structure_warning": warn,
-            }
+            async def _fetch_search():
+                html = await self.client.fetch(url, kind="search")
+                warn = detect_structure_change(html, "search")
+                if warn:
+                    log.warning("search structure change: %s", warn)
+                cards, total_pages = parse_search(html)
+                for card in cards:
+                    self.db.upsert_video(card_to_detail(card))
+                self.db.add_search_history(query or "", filters)
+                return {
+                    "cards": [c.model_dump() for c in cards],
+                    "total_pages": total_pages,
+                    "query": query,
+                    "structure_warning": warn,
+                }
+            return await self._cached(cache_key, _fetch_search)
         return await self._run(_do())
 
     async def crawl_video(self, code: str) -> VideoDetail:
