@@ -117,9 +117,14 @@ def parse_cards(html: str) -> list[VideoCard]:
 def parse_home(html: str) -> dict[str, list[VideoCard]]:
     sel = Selector(text=html)
     rows: dict[str, list[VideoCard]] = {}
-    for sec in sel.css(".home-rows-section-margin-top"):
-        title = clean(sec.css("a.horizontal-row-title h3::text").get())
-        cards = [c for c in (parse_card(x) for x in sec.css(".horizontal-card")) if c]
+    for a in sel.css("a.horizontal-row-title"):
+        title = clean(a.css("h3::text").get())
+        # 行标题紧跟 <div><div class="home-rows-videos-wrapper">…
+        wrapper = a.xpath(
+            'following-sibling::div[1]//div[contains(@class,"home-rows-videos-wrapper")][1]')
+        if not wrapper:
+            continue
+        cards = [c for c in (parse_card(x) for x in wrapper.css(".horizontal-card")) if c]
         if title and cards:
             rows.setdefault(title, []).extend(cards)
     return rows

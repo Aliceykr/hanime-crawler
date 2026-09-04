@@ -1,0 +1,161 @@
+:root {
+  --bg: #141416;
+  --bg2: #1d1d21;
+  --card: #232327;
+  --border: #33333a;
+  --text: #f2f2f3;
+  --text2: #9a9aa3;
+  --accent: #e5396e;
+  --ok: #52c41a;
+  --warn: #faad14;
+  --err: #ea6668;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+button { font: inherit; cursor: pointer; }
+
+/* ── 顶栏 ── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-inner {
+  max-width: 1200px; margin: 0 auto; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.brand {
+  background: none; border: none; color: var(--text);
+  font-size: 18px; font-weight: 700; padding: 8px 10px;
+  min-height: 44px;
+}
+.brand span { color: var(--accent); }
+.search-box { display: flex; gap: 8px; flex: 1 1 280px; min-width: 0; }
+.search-box input {
+  flex: 1 1 200px; min-width: 0; height: 40px;
+  padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+}
+.search-box select {
+  height: 40px; padding: 0 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  max-width: 150px;
+}
+.search-box button {
+  height: 40px; padding: 0 18px; border-radius: 10px;
+  border: none; background: var(--accent); color: #fff; font-weight: 600;
+}
+.search-box button:active { opacity: .8; }
+
+/* ── 内容区 ── */
+.content { max-width: 1200px; margin: 0 auto; padding: 16px; min-height: calc(100vh - 140px); }
+.error-bar {
+  background: rgba(234, 102, 104, .12); border: 1px solid var(--err);
+  color: #ffb4b6; padding: 10px 14px; border-radius: 12px; margin-bottom: 14px;
+}
+.hidden { display: none !important; }
+.loading { text-align: center; padding: 40px 0; color: var(--text2); }
+.loading .spinner {
+  width: 34px; height: 34px; margin: 0 auto 12px;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 首页行 ── */
+.home-row { margin: 18px 0 26px; }
+.home-row h2 {
+  font-size: 17px; font-weight: 700; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.home-row h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+.grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+/* ── 卡片 ── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden; cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.card-thumb { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-badge { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.78); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 6px; }
+.card-stats { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.78); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 6px; }
+.card-body { padding: 9px 10px 11px; }
+.card-title {
+  font-size: 13px; font-weight: 600; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 36px;
+}
+.card-sub { color: var(--text2); font-size: 11.5px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 详情 ── */
+.back-btn {
+  background: var(--card); color: var(--text); border: 1px solid var(--border);
+  min-height: 40px; padding: 0 16px; border-radius: 10px; margin-bottom: 16px;
+}
+.detail { display: flex; gap: 20px; flex-wrap: wrap; }
+.detail-cover { flex: 1 1 300px; max-width: 480px; }
+.detail-cover img { width: 100%; border-radius: 14px; display: block; }
+.detail-info { flex: 2 1 380px; min-width: 0; }
+.detail-info h1 { font-size: 20px; line-height: 1.4; margin-bottom: 10px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--text2); font-size: 13px; margin-bottom: 14px; }
+.meta b { color: var(--text); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.tag {
+  background: rgba(229, 57, 110, .14); color: #ff9ab8;
+  border: 1px solid rgba(229, 57, 110, .4);
+  padding: 4px 12px; border-radius: 999px; font-size: 12.5px;
+}
+.desc {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px; color: var(--text2);
+  font-size: 13px; white-space: pre-wrap; word-break: break-word;
+}
+.sources { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.src-btn {
+  background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+  min-height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600;
+}
+.src-btn:hover { border-color: var(--accent); }
+
+.related { margin-top: 26px; }
+.related h3 { font-size: 16px; margin-bottom: 12px; }
+
+/* ── 评论 ── */
+.comments { margin-top: 26px; }
+.comments h3 { font-size: 16px; margin-bottom: 12px; }
+.comment {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 14px; margin-bottom: 10px;
+}
+.comment-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.comment-author { color: #8ab4ff; font-weight: 600; font-size: 13px; }
+.comment-time { color: var(--text2); font-size: 11.5px; }
+.comment-body { font-size: 13px; word-break: break-word; }
+
+/* ── 任务进度 ── */
+.task-progress { text-align: center; padding: 60px 16px; }
+.task-progress .spinner { width: 44px; height: 44px; margin: 0 auto 16px; border-width: 4px; }
+
+.footer { text-align: center; color: var(--text2); font-size: 12px; padding: 20px 0 30px; }
+
+/* ── 移动端 ≤480px ── */
+@media (max-width: 480px) {
+  .topbar-inner { padding: 8px 10px; gap: 8px; }
+  .search-box { flex-basis: 100%; order: 3; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .content { padding: 10px; }
+  .detail-info h1 { font-size: 17px; }
+  .card-title { font-size: 12px; }
+}

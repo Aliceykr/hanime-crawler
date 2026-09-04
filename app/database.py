@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS videos (
     cover_url TEXT,
     artist_id INTEGER REFERENCES artists(id),
     series_title TEXT,
+    related_json TEXT,
     crawled_at TEXT,
     content_hash TEXT
 );
@@ -133,6 +134,11 @@ class Database:
         with self.connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+            # 兼容旧库：为已存在的 videos 表补列（幂等）
+            try:
+                conn.execute("ALTER TABLE videos ADD COLUMN related_json TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     # ── 幂等写入 ──
     def upsert_artist(self, name: str, slug: Optional[str] = None,
@@ -165,8 +171,8 @@ class Database:
             conn.execute(
                 """INSERT INTO videos(code, title, title_cn, description, views, views_raw,
                        likes, likes_raw, published_at, duration, cover_url, artist_id,
-                       series_title, crawled_at, content_hash)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       series_title, related_json, crawled_at, content_hash)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(code) DO UPDATE SET
                        title=excluded.title,
                        title_cn=COALESCE(excluded.title_cn, videos.title_cn),
@@ -180,13 +186,17 @@ class Database:
                        cover_url=COALESCE(excluded.cover_url, videos.cover_url),
                        artist_id=COALESCE(excluded.artist_id, videos.artist_id),
                        series_title=COALESCE(excluded.series_title, videos.series_title),
+                       related_json=COALESCE(excluded.related_json, videos.related_json),
                        crawled_at=excluded.crawled_at,
                        content_hash=excluded.content_hash""",
                 (
                     detail.code, detail.title, detail.title_cn, detail.description,
                     detail.views, detail.views_raw, detail.likes, detail.likes_raw,
                     detail.published_at, detail.duration, detail.cover_url, artist_id,
-                    detail.series_title, detail.crawled_at.isoformat(timespec="seconds"),
+                    detail.series_title,
+                    json.dumps([r.model_dump() for r in detail.related], ensure_ascii=False)
+                    if detail.related else None,
+                    detail.crawled_at.isoformat(timespec="seconds"),
                     content_hash,
                 ),
             )
@@ -343,6 +353,15 @@ class Database:
         with self.connect() as conn:
             row = conn.execute("SELECT * FROM crawl_tasks WHERE id=?", (task_id,)).fetchone()
             return dict(row) if row else None
+
+    def find_running_task(self, kind: str, target: str) -> Optional[int]:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM crawl_tasks WHERE kind=? AND target=? "
+                "AND status IN ('queued','running') ORDER BY id DESC LIMIT 1",
+                (kind, target),
+            ).fetchone()
+            return row["id"] if row else None
 
     # ── 评论（M2） ──
     def save_comments(self, video_code: str, comments: list[Comment]) -> None:

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hanime Crawler</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <button class="brand" id="brandBtn" type="button">Hanime<span>Viewer</span></button>
+    <div class="search-box">
+      <input id="searchInput" type="text" placeholder="搜索视频标题 / code…" maxlength="100">
+      <select id="sortSelect" aria-label="排序">
+        <option value="">最新上市</option>
+        <option value="最新上傳">最新上傳</option>
+        <option value="本日排行">本日排行</option>
+        <option value="本週排行">本週排行</option>
+        <option value="本月排行">本月排行</option>
+        <option value="觀看次數">觀看次數</option>
+        <option value="讚好比例">讚好比例</option>
+        <option value="他們在看">他們在看</option>
+        <option value="時長最長">時長最長</option>
+      </select>
+      <button id="searchBtn" type="button">搜索</button>
+    </div>
+  </div>
+</header>
+
+<main class="content">
+  <div id="errorBar" class="error-bar hidden"></div>
+  <div id="view"></div>
+</main>
+
+<footer class="footer">
+  hanime-crawler · 本地研究工具 · 遵守 PLAN 合规边界
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
