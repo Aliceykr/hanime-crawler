@@ -146,7 +146,8 @@
       "</div>" +
       (v.title_cn ? '<div class="meta">中文标题：' + esc(v.title_cn) + "</div>" : "") +
       (tags ? '<div class="tag-list">' + tags + "</div>" : "") +
-      (sources ? '<div class="sources">' + sources + "</div>" : "") +
+      (sources ? '<div class="sources">' + sources + "</div>" :
+        (data.partial ? '<div class="sources"><span class="dl-hint">正在获取视频源…</span></div>' : "")) +
       (v.description ? '<div class="desc">' + esc(v.description) + "</div>" : "") +
       "</div></div>" +
       (related ? '<section class="related"><h3>相关视频</h3><div class="grid">' + related + "</div></section>" : "");
@@ -208,12 +209,30 @@
         if (!resp.ok) return resp.json().then(function (b) { throw new Error(b.detail || "HTTP " + resp.status); });
         return resp.json();
       })
-      .then(function (data) { renderDetail(data); })
+      .then(function (data) {
+        renderDetail(data);
+        // 卡片数据先渲染（立即出图/标题），后台补抓详情完成后自动刷新
+        if (data.partial) pollVideoRefresh(code, 0);
+      })
       .catch(function (e) {
         if (e === null) return; // 已转轮询
         showError("加载失败：" + (e && e.message ? e.message : "未知错误"));
         showLoading("加载失败");
       });
+  }
+
+  function pollVideoRefresh(code, tries) {
+    if (tries > 120) return;
+    fetch("/api/video/" + encodeURIComponent(code))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.partial) {
+          setTimeout(function () { pollVideoRefresh(code, tries + 1); }, 1500);
+          return;
+        }
+        renderDetail(d);
+      })
+      .catch(function () { setTimeout(function () { pollVideoRefresh(code, tries + 1); }, 2000); });
   }
 
   function pollTask(taskId, code, tries) {

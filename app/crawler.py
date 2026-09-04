@@ -131,27 +131,28 @@ class Crawler:
 
     async def crawl_video(self, code: str) -> VideoDetail:
         async def _do():
-            html = await self.client.fetch(f"watch?v={code}", kind="video")
+            # 详情页与评论并行抓取（URL 相互独立），总耗时 ≈ max(详情, 评论)
+            watch_task = asyncio.create_task(
+                self.client.fetch(f"watch?v={code}", kind="video"))
+            comment_task = asyncio.create_task(self._safe_comments(code))
+            html = await watch_task
             warn = detect_structure_change(html, "video")
             if warn:
                 log.warning("video structure change: %s", warn)
             detail = parse_video_detail(html, code)
             self.db.upsert_video(detail)
-            if warn is None:
-                await self.crawl_comments(code)  # 详情结构正常才尝试评论（评论失败不致命）
+            await comment_task
             return detail
         return await self._run(_do())
 
-    async def crawl_comments(self, code: str) -> list[dict[str, Any]]:
+    async def _safe_comments(self, code: str) -> None:
         """抓取视频评论（loadComment），失败仅记录日志，不影响详情任务。"""
         try:
             text = await self.client.fetch(f"loadComment?type=video&id={code}", kind="comment")
             comments = parse_comments(text)
             self.db.save_comments(code, comments)
-            return [c.model_dump() for c in comments]
         except (FetchError, ChallengeError) as e:
             log.warning("comments fetch failed for %s: %s", code, e)
-            return []
 
     async def crawl_preview(self, date: str) -> dict[str, Any]:
         """抓取新番预告页（previews/{YYYYMM}），卡片入库并返回。

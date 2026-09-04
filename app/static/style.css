@@ -250,6 +250,7 @@ a.ghost-btn {
   cursor: pointer; font-size: 14px;
 }
 .dl-btn:hover { border-color: var(--accent); }
+.dl-hint { color: var(--text2); font-size: 13px; }
 
 .related { margin-top: 26px; }
 .related h3 { font-size: 16px; margin-bottom: 12px; }

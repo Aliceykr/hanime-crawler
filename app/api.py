@@ -191,13 +191,18 @@ def create_app() -> FastAPI:
                         headers={"Content-Disposition":
                                  'attachment; filename="hanime_videos.csv"'})
 
-    # ── 视频详情：缓存优先，未命中创建后台任务 ──
+    # ── 视频详情：完整缓存直返；有卡片轻量数据先渲染+后台补详情；否则 202 轮询 ──
     @app.get("/api/video/{code}")
     async def api_video(code: str):
         cached = build_video_payload(db, code)
-        # 完整缓存 = 已抓详情且解析到视频源；仅有卡片轻量数据不算（避免返回无源详情）
         if cached is not None and cached.get("sources"):
-            return {"cached": True, "video": cached}
+            return {"cached": True, "partial": False, "video": cached}
+        if cached is not None:
+            # 已有卡片轻量数据（标题/封面/时长等）：立即返回渲染，后台补抓详情
+            if db.find_running_task("video", code) is None:
+                task_id = db.create_crawl_task("video", code)
+                asyncio.create_task(crawler.run_crawl_task(task_id, "video", code))
+            return {"cached": True, "partial": True, "video": cached}
         existing = db.find_running_task("video", code)
         if existing is not None:
             return JSONResponse(status_code=202, content={
