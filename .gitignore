@@ -1,0 +1,26 @@
+# ── 参考仓库：永不提交 ──
+Han1meViewer/
+
+# ── 运行时数据 ──
+data/
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# ── 测试与日志 ──
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# ── IDE / 系统 ──
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
