@@ -549,3 +549,30 @@ downloader:                    # M4 预留
 3. 抓取 5 份真实页面样本存入 `tests/fixtures/`，实现 `parser.py` 并跑通离线 pytest。
 4. 实现 `client.py` + `crawler.py` + `api.py` + 静态前端，跑通 搜索 → 详情 → 缓存 闭环，交付 M1。
 5. 每步完成后按 §10.4 提交 git。
+
+---
+
+## 12. 实施记录（2026-09-04）
+
+| 步骤 | 提交 | 内容 | 测试 |
+|---|---|---|---|
+| step 0 | 610c10a | git init + .gitignore（排除 Han1meViewer/data）+ PLAN 定稿 | gitignore 核验 |
+| step 2 | c083c0c | requirements / config（BASE_DIR 自动探测+代理）/ models / database 建表 | pytest 14 |
+| step 3 | 4a6e30c | 5 份真实样本 fixtures + parser（纯函数+广告过滤+结构检测） | pytest 26 |
+| step 4 (M1) | 79b885c | client + crawler + api（缓存优先 202 轮询）+ 前端 | pytest 34 + 真实冒烟 |
+| step 5 (M2) | e1df049 | 评论 / Preview / 任务列表 / pages_meta / 结构检测接入 | pytest 38 |
+| step 6 (M3) | 7f3fde6 | CSV(utf-8-sig)/JSON 导出 + 统计 + 前端 | pytest 40 |
+| step 7 (M4) | 4b754e4 | downloader.py（队列/Range/断点续传/暂停恢复取消/URL 刷新）+ 下载 API + settings + 定时增量 | pytest 50 |
+| step 8 (验收) | — | 真实冒烟（首页12行/预览10部/完整下载39MB→completed/续传/取消清理）+ 浏览器 UI 全流程 + 整体复制可移植性验证（新目录 50 测试通过） | pytest 50 + 冒烟 + 可移植 |
+
+### 验收结论（§10.2/10.3 对照）
+
+- 鲁棒性 R1 代理不可用/403 → 前端错误提示，不静默直连（client 检测 challenge 停止重试）✅
+- R2 URL 过期 → 自动重抓详情刷新 VideoSource 后继续（真实 404 场景 + 单元测试）✅
+- R3 崩溃恢复 → .part 残留 + paused/queued 任务在服务重启后由 DownloadManager.start() 恢复 ✅
+- R4 数据库并发 → WAL + 单连接 upsert 防锁 ✅
+- R5 站点改版 → detect_structure_change 返回 structure_warning，前端提示 ✅
+- R6 大文件内存 → 1 MiB 流式分块，不整读 ✅
+- R7 并发隔离 → 爬虫 2/请求间隔 1s，下载 2 并发，独立信号量 ✅
+- R8 绝对路径/可移植 → BASE_DIR 自动探测，整体复制后 pytest 50 全绿 ✅
+- 可用性 7 项（一键启动/UI 可操作/搜索详情缓存/下载进度/导出/设置保存/移动可运行）全部实测 ✅
