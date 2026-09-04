@@ -38,6 +38,50 @@ _DOWNLOADING = ("downloading",)
 _RESUMABLE = ("queued", "downloading", "paused")
 
 
+def migrate_download_dirs(cfg: Config, db: Database) -> None:
+    """旧版 {video_code} 下载目录 → {作品名} 目录：移动文件并更新 DB 路径（幂等）。
+
+    仅处理 final_path 真实存在且目标目录不同的任务；同名同大小视为重复删除旧文件，
+    同名不同内容保守跳过（保留旧路径）。标题缺失时保持 video_code 目录。
+    """
+    root = Path(cfg.paths.downloads_dir)
+    moved = 0
+    for t in db.list_download_tasks(limit=500):
+        fp = (t.get("final_path") or "").strip()
+        if not fp:
+            continue
+        old = Path(fp)
+        if not old.exists():
+            continue
+        title = None
+        v = db.get_video(str(t.get("video_code") or ""))
+        if v and (v.get("title") or "").strip():
+            title = v["title"].strip()
+        name = sanitize_filename(title) if title else str(t.get("video_code") or "untitled")
+        new_dir = root / name
+        if new_dir.resolve() == old.parent.resolve():
+            continue
+        new_fp = new_dir / old.name
+        if new_fp.exists():
+            if new_fp.stat().st_size == old.stat().st_size:
+                old.unlink(missing_ok=True)
+                final = new_fp
+            else:
+                continue  # 同名不同内容：保守跳过
+        else:
+            new_dir.mkdir(parents=True, exist_ok=True)
+            old.rename(new_fp)
+            final = new_fp
+            try:
+                old.parent.rmdir()  # 旧目录已空则删除（非空时忽略）
+            except OSError:
+                pass
+        db.update_download_task(t["id"], final_path=str(final))
+        moved += 1
+    if moved:
+        log.info("migrated %d download dir(s) to title-based names", moved)
+
+
 class DownloadError(Exception):
     pass
 
@@ -152,8 +196,7 @@ class DownloadWorker:
                 mode = "wb"
 
             task = self.db.get_download_task(task_id)
-            final_dir = Path(self.cfg.paths.downloads_dir) / str(task["video_code"])
-            final_dir.mkdir(parents=True, exist_ok=True)
+            final_dir = self._final_dir(task)
             filename = self._filename(task, url)
             final_path = final_dir / filename
             temp_path = Path(self.cfg.paths.tmp_dir) / f"download_{task_id}.part"
@@ -209,6 +252,18 @@ class DownloadWorker:
             temp_path=None)
 
     # ── 辅助 ──
+    def _final_dir(self, task: dict[str, Any]) -> Path:
+        """下载目录：作品名（sanitize 后）；标题缺失/为空时兜底 video_code。"""
+        root = Path(self.cfg.paths.downloads_dir)
+        title = None
+        v = self.db.get_video(str(task["video_code"]))
+        if v and (v.get("title") or "").strip():
+            title = v["title"].strip()
+        name = sanitize_filename(title) if title else str(task["video_code"])
+        d = root / name
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
     def _fail(self, task_id: int, message: str) -> None:
         self.db.update_download_task(task_id, status="failed", error=message, speed=0.0)
         log.error("download %s failed: %s", task_id, message)
@@ -284,7 +339,8 @@ class DownloadManager:
         self.active: set[int] = set()
 
     async def start(self) -> None:
-        """启动时恢复未完成任务（queued/downloading/paused）。"""
+        """启动时：迁移旧下载目录（code→作品名），并恢复未完成任务。"""
+        migrate_download_dirs(self.cfg, self.db)
         for t in self.db.list_download_tasks(limit=500):
             if t["status"] in _RESUMABLE:
                 self.enqueue(t["id"])

@@ -19,7 +19,9 @@ import pytest
 
 from app.config import Config, DownloaderConfig, PathsConfig, ProxyConfig
 from app.database import Database
-from app.downloader import DownloadManager
+from app.downloader import DownloadManager, migrate_download_dirs
+from app.models import VideoDetail
+from app.parser import sanitize_filename
 
 
 class _SlowHandler(http.server.SimpleHTTPRequestHandler):
@@ -224,3 +226,42 @@ def test_download_delete_removes_files(env):
         assert db.get_download_task(tid) is None
 
     asyncio.run(body())
+
+
+def test_download_dir_uses_title(env):
+    """下载目录用作品名（sanitize 后），不是 video_code 代号。"""
+    cfg, db, serve_dir, port = env
+    _make_file(serve_dir, "v.mp4", 1)
+    url = f"http://127.0.0.1:{port}/v.mp4"
+    db.upsert_video(VideoDetail(code="200002", title="My/Title: 測試? <作品>"))
+    tid = db.create_download_task("200002", "1080P", url=url)
+
+    async def body():
+        mgr = DownloadManager(db, cfg)
+        mgr.enqueue(tid)
+        t = await _await_status(db, tid, {"completed", "failed"})
+        assert t["status"] == "completed"
+        final = Path(t["final_path"])
+        assert final.parent.name == sanitize_filename("My/Title: 測試? <作品>")
+        assert final.exists()
+
+    asyncio.run(body())
+
+
+def test_migrate_download_dirs(env):
+    """旧 {video_code} 目录 → {作品名} 目录：移动文件并更新 DB 路径。"""
+    cfg, db, serve_dir, port = env
+    dl = Path(cfg.paths.downloads_dir)
+    old_dir = dl / "100001"
+    old_dir.mkdir(parents=True)
+    f = old_dir / "1080P.mp4"
+    f.write_bytes(b"x" * 100)
+    db.upsert_video(VideoDetail(code="100001", title="作品 A"))
+    tid = db.create_download_task("100001", "1080P", url="http://x/x.mp4")
+    db.update_download_task(tid, status="completed", final_path=str(f))
+    migrate_download_dirs(cfg, db)
+    t = db.get_download_task(tid)
+    new_fp = Path(t["final_path"])
+    assert new_fp.parent.name == sanitize_filename("作品 A")
+    assert new_fp.exists()
+    assert not old_dir.exists()
