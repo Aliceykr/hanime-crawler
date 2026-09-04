@@ -218,7 +218,11 @@ a.ghost-btn {
   background: rgba(229, 57, 110, .14); color: #ff9ab8;
   border: 1px solid rgba(229, 57, 110, .4);
   padding: 4px 12px; border-radius: 999px; font-size: 12.5px;
+  min-height: 28px;
 }
+/* tag 可点击搜索 */
+.tag-btn { cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.tag-btn:hover { background: rgba(229, 57, 110, .28); border-color: var(--accent); color: #ffd0dd; }
 .desc {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px 14px; color: var(--text2);

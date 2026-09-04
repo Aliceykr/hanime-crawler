@@ -118,7 +118,7 @@
     var cover = v.cover_url
       ? '<img alt="" src="' + esc(imgProxy(v.cover_url)) + '">' : "";
     var tags = (v.tags || []).map(function (t) {
-      return '<span class="tag">' + esc(t) + "</span>";
+      return '<button class="tag tag-btn" type="button" data-tag="' + esc(t) + '">' + esc(t) + "</button>";
     }).join("");
     // 每个分辨率一个下载按钮（不调浏览器下载，全部走后端任务）
     var sources = (v.sources || []).map(function (s) {
@@ -147,6 +147,14 @@
       (related ? '<section class="related"><h3>相关视频</h3><div class="grid">' + related + "</div></section>" : "");
 
     document.getElementById("backBtn").addEventListener("click", goBack);
+    // tag 可点击：点击即按该 tag 搜索
+    Array.prototype.forEach.call(view.querySelectorAll(".tag-btn"), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        searchInput.value = btn.getAttribute("data-tag");
+        doSearch();
+      });
+    });
     Array.prototype.forEach.call(view.querySelectorAll(".dl-btn"), function (btn) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
