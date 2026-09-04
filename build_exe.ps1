@@ -9,7 +9,7 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 python -m PyInstaller --noconfirm --clean --onedir --noconsole --name hanime-crawler `
   --workpath "$work" `
   --specpath "$work" `
-  --add-data "app/static;app/static" `
+  --add-data "$PSScriptRoot\app\static;app/static" `
   --collect-all webview `
   --collect-all pythonnet `
   --collect-all clr_loader `
