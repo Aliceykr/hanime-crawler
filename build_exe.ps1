@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-python -m PyInstaller --noconfirm --clean --onefile --console --name hanime-crawler `
+python -m PyInstaller --noconfirm --clean --onefile --noconsole --name hanime-crawler `
   --add-data "app/static;app/static" `
   --collect-all webview `
   --collect-all pythonnet `
