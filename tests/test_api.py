@@ -12,6 +12,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import build_video_payload, create_app
+from app.crawler import _shift_month
+
+
+def test_shift_month():
+    """预览月份回溯：跨年/进位/负偏移。"""
+    assert _shift_month("202609", 0) == "202609"
+    assert _shift_month("202609", -1) == "202608"
+    assert _shift_month("202601", -1) == "202512"
+    assert _shift_month("202512", -1) == "202511"
+    assert _shift_month("202401", -12) == "202301"
+    assert _shift_month("202512", 1) == "202601"
 
 
 @pytest.fixture()

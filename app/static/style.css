@@ -189,6 +189,14 @@ a.ghost-btn {
 }
 .src-btn:hover { border-color: var(--accent); }
 
+/* 详情页「下载」按钮：与 src-btn 同风格，统一深色界面 */
+.dl-btn {
+  background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+  min-height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600;
+  cursor: pointer; font-size: 14px;
+}
+.dl-btn:hover { border-color: var(--accent); }
+
 .related { margin-top: 26px; }
 .related h3 { font-size: 16px; margin-bottom: 12px; }
 

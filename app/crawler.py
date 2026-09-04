@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date as _date
 from typing import Any, Optional
 from urllib.parse import urlencode
 
@@ -21,6 +22,13 @@ from .parser import (
 )
 
 log = logging.getLogger("hanime.crawler")
+
+
+def _shift_month(ym: str, delta: int) -> str:
+    """YYYYMM 偏移 delta 个月（delta 可为负）。"""
+    d = _date(int(ym[:4]), int(ym[4:6]), 1)
+    total = d.year * 12 + (d.month - 1) + delta
+    return f"{total // 12}{(total % 12) + 1:02d}"
 
 
 def card_to_detail(card: VideoCard) -> VideoDetail:
@@ -123,7 +131,26 @@ class Crawler:
             return []
 
     async def crawl_preview(self, date: str) -> dict[str, Any]:
-        """抓取新番预告页（previews/{YYYYMM}），卡片入库并返回。"""
+        """抓取新番预告页（previews/{YYYYMM}），卡片入库并返回。
+
+        站方仅部分月份有预告数据（其余返回 500/空）：自动向前逐月回溯
+        最多 6 次，返回最近有数据的月份，保证前端总能加载到。
+        """
+        last_err: Optional[Exception] = None
+        for i in range(6):
+            d = _shift_month(date, -i)
+            try:
+                result = await self._crawl_preview_one(d)
+                if result["items"]:
+                    return result
+                last_err = FetchError(f"previews/{d}: empty")
+                log.warning("previews/%s empty, try previous month", d)
+            except (FetchError, ChallengeError) as e:
+                last_err = e
+                log.warning("previews/%s failed: %s, try previous month", d, e)
+        raise last_err or FetchError(f"previews/{date}: no data")
+
+    async def _crawl_preview_one(self, date: str) -> dict[str, Any]:
         async def _do():
             html = await self.client.fetch(f"previews/{date}", kind="preview")
             warn = detect_structure_change(html, "preview")

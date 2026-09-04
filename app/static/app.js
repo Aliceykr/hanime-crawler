@@ -20,6 +20,8 @@
   function hideError() { errorBar.classList.add("hidden"); }
 
   function showLoading(text) {
+    // 离开下载管理视图时停止进度轮询
+    clearInterval(window.__dlTimer);
     view.innerHTML =
       '<div class="loading"><div class="spinner"></div><div>' + esc(text) + "</div></div>";
   }
@@ -257,7 +259,7 @@
       .then(function (data) {
         var head = document.createElement("div");
         head.style.cssText = "margin:4px 0 14px;color:#9a9aa3;font-size:13px;";
-        head.textContent = "新番預告 · " + date + " · " + data.items.length + " 部";
+        head.textContent = "新番預告 · " + data.date + " · " + data.items.length + " 部";
         renderGrid(data.items);
         view.insertBefore(head, view.firstChild);
       })
@@ -268,9 +270,9 @@
       });
   }
 
-  function loadDownloads() {
+  function loadDownloads(silent) {
     hideError();
-    showLoading("加载下载任务…");
+    if (!silent) showLoading("加载下载任务…");
     fetch("/api/settings")
       .then(function (r) { return r.json(); })
       .then(function (s) { return Promise.all([s, fetch("/api/downloads").then(function (r) { return r.json(); })]); })
@@ -317,12 +319,17 @@
             var act = b.getAttribute("data-act");
             var id = b.getAttribute("data-id");
             var url = "/api/download/" + id;
+            // delete 走 DELETE /api/download/{id}，其余走 POST /{id}/{act}
             var opt = { method: act === "delete" ? "DELETE" : "POST" };
-            fetch(url + "/" + act, opt).then(function () { loadDownloads(); });
+            fetch(act === "delete" ? url : url + "/" + act, opt).then(function () { loadDownloads(true); });
           });
         });
+        // 轮询刷新下载进度（进入视图后每 2s 静默更新一次）
+        clearInterval(window.__dlTimer);
+        window.__dlTimer = setInterval(function () { loadDownloads(true); }, 2000);
       })
       .catch(function (e) {
+        if (silent) return; // 轮询失败静默，下次再试
         showError("下载列表加载失败：" + (e && e.message ? e.message : ""));
         showLoading("下载列表加载失败");
       });
