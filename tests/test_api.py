@@ -188,6 +188,76 @@ def test_cover_route_validation(client):
         api_mod._get_cover_client = monkeypatch_backup
 
 
+def test_stream_route(client):
+    """試看流代理:非法协议 400 / Range 透传 + 流式(send stream=True)/ 非视频 502 / 上游异常 502。
+
+    关键回归:send 必须 stream=True(整读会把 657MB 视频缓冲进内存,播放器永远转圈)。
+    """
+    app, _ = client
+
+    import app.api as api_mod
+
+    class _FakeResp:
+        def __init__(self, status=206, headers=None, chunks=(b"abc", b"def")):
+            self.status_code = status
+            self.headers = headers or {"content-type": "video/mp4",
+                                       "content-range": "bytes 0-1023/657976421",
+                                       "accept-ranges": "bytes"}
+            self._chunks = chunks
+
+        async def aiter_bytes(self):
+            for c in self._chunks:
+                yield c
+
+        async def aclose(self):
+            pass
+
+    class _FakeClient:
+        def __init__(self):
+            self.last_headers: dict = {}
+            self.last_stream = None
+            self.resp = _FakeResp()
+
+        def build_request(self, method, url, headers=None):
+            self.last_headers = dict(headers or {})
+            return (method, url, self.last_headers)
+
+        async def send(self, req, stream=False):
+            self.last_stream = stream
+            return self.resp
+
+    fake = _FakeClient()
+    backup = api_mod._get_stream_client
+    api_mod._get_stream_client = lambda config: fake
+    try:
+        # 非法协议拒绝(防 SSRF 到 file:// 等)
+        assert app.get("/api/stream", params={"url": "file:///etc/passwd"}).status_code == 400
+        assert app.get("/api/stream", params={"url": "javascript:alert(1)"}).status_code == 400
+        # Range 透传 + 流式请求 + 206 与 content-range 原样返回
+        r = app.get("/api/stream", params={"url": "https://cdn/x/1.mp4"},
+                    headers={"Range": "bytes=0-1023"})
+        assert r.status_code == 206
+        assert fake.last_stream is True  # 根因回归:必须流式,不整读
+        assert fake.last_headers.get("Range") == "bytes=0-1023"
+        assert r.headers.get("content-range") == "bytes 0-1023/657976421"
+        assert r.content == b"abcdef"
+        # 非视频内容拒绝
+        fake.resp = _FakeResp(status=200, headers={"content-type": "text/html"})
+        assert app.get("/api/stream", params={"url": "https://cdn/x/2"}).status_code == 502
+        # 上游异常 → 502 可读错误
+        class _Boom:
+            def build_request(self, *a, **k):
+                return None
+
+            async def send(self, *a, **k):
+                raise RuntimeError("boom")
+
+        api_mod._get_stream_client = lambda config: _Boom()
+        assert app.get("/api/stream", params={"url": "https://cdn/x/3"}).status_code == 502
+    finally:
+        api_mod._get_stream_client = backup
+
+
 def test_video_uncached_returns_202_then_cached(client):
     app, db = client
     r = app.get("/api/video/999001")

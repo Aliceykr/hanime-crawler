@@ -178,7 +178,9 @@ def create_app() -> FastAPI:
         if range_h:
             headers["Range"] = range_h
         try:
-            resp = await _get_stream_client(config).get(url, headers=headers)
+            # 必须流式：client.get() 会把整个视频缓冲进内存（657MB）才返回，播放器永远转圈
+            req = _get_stream_client(config).build_request("GET", url, headers=headers)
+            resp = await _get_stream_client(config).send(req, stream=True)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502,
                                 detail=f"stream fetch failed: {type(e).__name__}: {e}")
