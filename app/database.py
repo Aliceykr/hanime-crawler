@@ -139,6 +139,19 @@ class Database:
                 conn.execute("ALTER TABLE videos ADD COLUMN related_json TEXT")
             except sqlite3.OperationalError:
                 pass
+        # 启动清扫:残留的 queued/running 任务在进程死时已终止,不清理会让
+        # find_running_task 永远命中 → 该视频详情页永久 202 卡死(§12 step 24b)
+        self.sweep_stale_tasks()
+
+    def sweep_stale_tasks(self) -> int:
+        """把残留的 queued/running 抓取任务标记为 failed,返回清扫行数。"""
+        with self.connect() as conn:
+            cur = conn.execute(
+                "UPDATE crawl_tasks SET status='failed', error=?, updated_at=? "
+                "WHERE status IN ('queued','running')",
+                ("interrupted: process restart", _now()),
+            )
+            return cur.rowcount
 
     # ── 幂等写入 ──
     def upsert_artist(self, name: str, slug: Optional[str] = None,

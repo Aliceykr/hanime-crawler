@@ -103,6 +103,26 @@ def test_crawl_task_lifecycle(tmp_path):
     assert t["target"] == "test"
 
 
+def test_sweep_stale_tasks_on_restart(tmp_path):
+    """重启清扫:残留 queued/running 在 init_db 时置为 failed+error,
+    否则 find_running_task 永远命中 → 详情页永久 202 卡死;completed 不动。"""
+    db = make_db(tmp_path)
+    qid = db.create_crawl_task("video", "111")
+    rid = db.create_crawl_task("video", "222")
+    db.update_crawl_task(rid, "running")
+    done = db.create_crawl_task("video", "333")
+    db.update_crawl_task(done, "completed")
+    assert db.find_running_task("video", "111") == qid  # 清扫前命中
+    # 模拟进程重启:同一库路径新建实例再 init_db → 残留任务被清扫
+    db2 = Database(db.config)
+    db2.init_db()
+    assert db2.find_running_task("video", "111") is None
+    t = db2.get_crawl_task(qid)
+    assert t["status"] == "failed" and "restart" in t["error"]
+    assert db2.get_crawl_task(rid)["status"] == "failed"
+    assert db2.get_crawl_task(done)["status"] == "completed"
+
+
 def test_search_history(tmp_path):
     db = make_db(tmp_path)
     db.add_search_history("test", {"sort": "new"})
