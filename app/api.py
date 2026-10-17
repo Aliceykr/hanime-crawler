@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
@@ -64,6 +65,26 @@ def _get_cover_client(config: Config) -> httpx.AsyncClient:
     return _cover_client
 
 
+async def _aclose_proxy_clients() -> None:
+    """关闭封面/视频流两个模块级代理客户端(否则进程退出时连接池悬挂)。"""
+    global _cover_client, _stream_client
+    for client in (_cover_client, _stream_client):
+        if client is not None:
+            await client.aclose()
+    _cover_client = None
+    _stream_client = None
+
+
+async def _auto_refresh_loop(c: Crawler, minutes: int) -> None:
+    """定时增量抓取首页。"""
+    while True:
+        await asyncio.sleep(minutes * 60)
+        try:
+            await c.crawl_home()
+        except Exception as e:  # noqa: BLE001
+            log.warning("auto refresh failed: %s", e)
+
+
 def build_video_payload(db: Database, code: str) -> Optional[dict[str, Any]]:
     import json as _json
     v = db.get_video(code)
@@ -88,25 +109,24 @@ def create_app() -> FastAPI:
     crawler = Crawler(config, db=db)
     downloader = DownloadManager(db, config, provider=crawler)
 
-    app = FastAPI(title="hanime-crawler", version="0.1.0")
-
-    @app.on_event("startup")
-    async def _startup() -> None:
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        """启动:拉起下载队列(含旧目录迁移与续传);关闭:回收全部 HTTP 客户端。"""
         await downloader.start()
+        refresh_task = None
         if config.auto_interval_minutes > 0:
-            asyncio.create_task(_auto_refresh_loop(crawler, config.auto_interval_minutes))
+            refresh_task = asyncio.create_task(
+                _auto_refresh_loop(crawler, config.auto_interval_minutes))
+        try:
+            yield
+        finally:
+            if refresh_task is not None:
+                refresh_task.cancel()
+            await crawler.close()
+            await downloader.close()
+            await _aclose_proxy_clients()
 
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:
-        await crawler.close()
-
-    async def _auto_refresh_loop(c: Crawler, minutes: int) -> None:
-        while True:
-            await asyncio.sleep(minutes * 60)
-            try:
-                await c.crawl_home()
-            except Exception as e:  # noqa: BLE001
-                log.warning("auto refresh failed: %s", e)
+    app = FastAPI(title="hanime-crawler", version="0.1.0", lifespan=_lifespan)
 
     def _http_error(e: Exception) -> HTTPException:
         if isinstance(e, ChallengeError):
@@ -220,7 +240,6 @@ def create_app() -> FastAPI:
     @app.get("/api/export")
     async def api_export(fmt: str = "csv"):
         items = db.export_videos()
-        from fastapi.responses import Response, PlainTextResponse
         if fmt == "json":
             body = json.dumps(items, ensure_ascii=False, indent=2)
             return Response(content=body, media_type="application/json",

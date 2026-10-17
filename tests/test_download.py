@@ -19,7 +19,7 @@ import pytest
 
 from app.config import Config, DownloaderConfig, PathsConfig, ProxyConfig
 from app.database import Database
-from app.downloader import DownloadManager, migrate_download_dirs
+from app.downloader import DownloadManager, DownloadWorker, migrate_download_dirs
 from app.models import VideoDetail
 from app.parser import sanitize_filename
 
@@ -265,3 +265,61 @@ def test_migrate_download_dirs(env):
     assert new_fp.parent.name == sanitize_filename("作品 A")
     assert new_fp.exists()
     assert not old_dir.exists()
+
+
+def test_worker_reuses_and_closes_own_client(env):
+    """回归(step 25):DownloadWorker 必须复用同一个 httpx 客户端并在 run() 结束时关闭。
+
+    原实现每次 _http() 都新建 AsyncClient 且从不 aclose → 每次下载/重试漏一个连接池。
+    """
+    cfg, db, _, _ = env
+
+    async def body():
+        w = DownloadWorker(db, cfg)
+        c1 = w._http()
+        assert w._http() is c1          # 复用,不重复新建
+        assert w._owns_client is True
+        await w.aclose()
+        assert w._client is None and w._owns_client is False
+
+    asyncio.run(body())
+
+
+def test_worker_keeps_injected_client_open(env):
+    """注入的客户端所有权归调用方:worker 收尾不得关闭它。"""
+    cfg, db, _, _ = env
+    closed = {"v": False}
+
+    class FakeClient:
+        async def aclose(self):
+            closed["v"] = True
+
+    async def body():
+        fake = FakeClient()
+        w = DownloadWorker(db, cfg, client=fake)
+        assert w._http() is fake
+        await w.aclose()
+        assert closed["v"] is False
+
+    asyncio.run(body())
+
+
+def test_manager_close_closes_shared_client(env):
+    """回归(step 25):lifespan 关闭时 DownloadManager.close() 必须真正关闭共享客户端。
+
+    原实现用 asyncio.get_event_loop().run_until_complete(...) 且从未被调用。
+    """
+    cfg, db, _, _ = env
+    closed = {"v": False}
+
+    class FakeClient:
+        async def aclose(self):
+            closed["v"] = True
+
+    async def body():
+        mgr = DownloadManager(db, cfg, client=FakeClient())
+        await mgr.close()
+        assert closed["v"] is True
+        assert mgr._client is None
+
+    asyncio.run(body())

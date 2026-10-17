@@ -118,10 +118,18 @@ class DownloadWorker:
         self.provider = provider          # 刷新 VideoSource 的异步对象（Crawler）
         self.ctrl = control or _Control()
         self._client = client
+        self._owns_client = False          # 自建 client 需自己关闭(注入的由调用方负责)
         self.chunk_size = int(config.downloader.chunk_size or (1024 * 1024))
 
     # ── 对外入口 ──
     async def run(self, task_id: int) -> None:
+        """单任务完整生命周期:结束后必定关闭本 worker 自建的 HTTP 客户端。"""
+        try:
+            await self._run(task_id)
+        finally:
+            await self.aclose()
+
+    async def _run(self, task_id: int) -> None:
         task = self.db.get_download_task(task_id)
         if not task:
             return
@@ -312,17 +320,26 @@ class DownloadWorker:
             return None
 
     def _http(self) -> httpx.AsyncClient:
-        if self._client is not None:
-            return self._client
-        proxy = None
-        if self.cfg.proxy.enabled and self.cfg.proxy.url:
-            proxy = self.cfg.proxy.url
-        return httpx.AsyncClient(
-            follow_redirects=True, timeout=httpx.Timeout(30.0, read=30.0),
-            proxy=proxy,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                   "Chrome/149.0.0.0 Safari/537.36"})
+        """惰性创建并复用同一个客户端;每次调用都新建会漏连接池(见 run() 收尾的 aclose)。"""
+        if self._client is None:
+            proxy = None
+            if self.cfg.proxy.enabled and self.cfg.proxy.url:
+                proxy = self.cfg.proxy.url
+            self._client = httpx.AsyncClient(
+                follow_redirects=True, timeout=httpx.Timeout(30.0, read=30.0),
+                proxy=proxy,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/149.0.0.0 Safari/537.36"})
+            self._owns_client = True
+        return self._client
+
+    async def aclose(self) -> None:
+        """关闭自建的 HTTP 客户端;注入的客户端不在此关闭(所有权归调用方)。"""
+        if self._owns_client and self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            self._owns_client = False
 
 
 class DownloadManager:
@@ -423,6 +440,8 @@ class DownloadManager:
             Path(task["temp_path"]).unlink(missing_ok=True)
         self.db.update_download_task(task_id, status="cancelled")
 
-    def close(self) -> None:
+    async def close(self) -> None:
+        """关闭注入的共享客户端(worker 自建的客户端在各自 run() 结束时已关闭)。"""
         if self._client is not None:
-            asyncio.get_event_loop().run_until_complete(self._client.aclose())
+            await self._client.aclose()
+            self._client = None

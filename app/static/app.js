@@ -131,7 +131,6 @@
       return '<button class="dl-btn" type="button" data-code="' + esc(v.code) +
         '" data-res="' + esc(s.resolution) + '">' + esc(s.resolution) + "</button>";
     }).join("");
-    var tryPick = sortedSources;  // 試看覆盖全部分辨率流
     var sourcesBlock = sources
       ? '<div class="sources"><button class="dl-btn try-btn" type="button">試看</button>' + sources + "</div>"
       : (data.partial ? '<div class="sources"><span class="dl-hint">正在获取视频源…</span></div>' : "");
@@ -221,7 +220,7 @@
       body: JSON.stringify({ video_code: code, resolution: res })
     })
       .then(function (r) { return r.json(); })
-      .then(function (d) {
+      .then(function () {
         loadDownloads();
       })
       .catch(function (e) {

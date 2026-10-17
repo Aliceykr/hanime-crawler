@@ -220,12 +220,7 @@ def parse_comments(json_text: str) -> list[Comment]:
     sel = Selector(text=html)
     comments: list[Comment] = []
     for wrap in sel.css("#comment-start .report-btn-wrapper"):
-        author = None
-        created_at = None
-        author_el = wrap.css(".comment-index-text").get()
-        if author_el is not None:
-            # 作者行：<a>名字 <span>时间</span></a>
-            a_sel = wrap.css(".comment-index-text").xpath(".")[0] if False else None
+        # 作者行：<a>名字 <span>时间</span></a>
         name_parts = wrap.css(".comment-index-text").xpath(
             "a//text()").getall()
         author = clean("".join(name_parts)) or None

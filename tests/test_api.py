@@ -74,6 +74,9 @@ def client(tmp_path, monkeypatch):
             except Exception as e:
                 self.db.update_crawl_task(task_id, "failed", str(e))
 
+        async def close(self):
+            pass  # lifespan 关闭会调用
+
     import app.api as api_mod
     monkeypatch.setattr(api_mod, "Crawler", FakeCrawler)
     monkeypatch.setattr(api_mod, "Database", lambda *a, **k: db)
@@ -115,6 +118,9 @@ def client(tmp_path, monkeypatch):
                 return False
             self.db.delete_download_task(task_id)
             return True
+
+        async def close(self):
+            pass  # lifespan 关闭会调用
 
     monkeypatch.setattr(api_mod, "DownloadManager", FakeDownloadManager)
 
@@ -392,6 +398,18 @@ def test_download_api_flow(client):
 def test_download_api_validation(client):
     app, _ = client
     assert app.post("/api/download", json={}).status_code == 400
+
+
+def test_lifespan_startup_and_shutdown(client):
+    """回归(step 25):on_event → lifespan 迁移后,进入/退出上下文仍正常。
+
+    startup 拉起下载队列(migrate + 续传),shutdown 关闭 crawler / downloader /
+    封面与视频流两个模块级代理客户端;任一环节缺失或抛异常此测试即失败。
+    """
+    app, _ = client
+    with app as ctx:
+        assert ctx.get("/api/home").status_code == 200
+    assert app.get("/api/tasks").status_code == 200
 
 
 def test_settings_route(client, monkeypatch, tmp_path):

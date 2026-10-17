@@ -314,22 +314,6 @@ class Database:
             rows = conn.execute(sql, params).fetchall()
             return [dict(r) for r in rows]
 
-    def stats(self) -> dict[str, Any]:
-        with self.connect() as conn:
-            videos = conn.execute("SELECT COUNT(*) c FROM videos").fetchone()["c"]
-            artists = conn.execute("SELECT COUNT(*) c FROM artists").fetchone()["c"]
-            tags = conn.execute("SELECT COUNT(*) c FROM tags").fetchone()["c"]
-            comments = conn.execute("SELECT COUNT(*) c FROM comments").fetchone()["c"]
-            sources = conn.execute("SELECT COUNT(*) c FROM video_sources").fetchone()["c"]
-            total_views = conn.execute("SELECT COALESCE(SUM(views),0) s FROM videos").fetchone()["s"]
-            return {
-                "videos": videos, "artists": artists, "tags": tags,
-                "comments": comments, "sources": sources, "total_views": total_views,
-            }
-
-    def export_videos(self) -> list[dict[str, Any]]:
-        return self.list_videos(limit=100000)
-
     # ── 搜索历史 ──
     def add_search_history(self, query: str, filters: Optional[dict] = None) -> None:
         with self.connect() as conn:

@@ -28,3 +28,9 @@ Thumbs.db
 dist/
 build/
 *.spec
+
+# ── 本机调试残留(DSH / 一次性排查脚本) ──
+.dsh-restart.ps1
+.dsh-restart.log
+.dsh-acl-reports/
+.tmp_inspect.py
